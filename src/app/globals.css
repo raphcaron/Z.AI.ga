@@ -124,6 +124,16 @@
   body {
     @apply bg-background text-foreground;
   }
+  /* Pointer cursor for all interactive elements */
+  button, 
+  [type="button"],
+  [type="submit"],
+  [type="reset"],
+  a,
+  [role="button"],
+  .cursor-pointer {
+    cursor: pointer;
+  }
 }
 
 /* Custom scrollbar for webkit browsers */
