@@ -318,14 +318,16 @@ export default function SessionPage() {
                       View Plans
                     </Button>
                   </Link>
-                  <Button 
-                    variant="secondary" 
-                    size="lg" 
-                    className="rounded-xl w-full sm:w-auto bg-white/10 text-white border border-white/30 hover:bg-white/20"
-                    onClick={() => setAuthModalOpen(true)}
-                  >
-                    Sign In
-                  </Button>
+                  {!user && (
+                    <Button 
+                      variant="secondary" 
+                      size="lg" 
+                      className="rounded-xl w-full sm:w-auto bg-white/10 text-white border border-white/30 hover:bg-white/20"
+                      onClick={() => setAuthModalOpen(true)}
+                    >
+                      Sign In
+                    </Button>
+                  )}
                 </div>
               </div>
             </div>
