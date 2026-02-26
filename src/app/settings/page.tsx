@@ -286,16 +286,16 @@ export default function SettingsPage() {
         <section className="py-12">
           <div className="container mx-auto px-4">
             <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-              <TabsList className="grid w-full grid-cols-3 rounded-xl mb-12 h-auto p-1.5">
-                <TabsTrigger value="profile" className="rounded-xl gap-2 py-3 px-4">
+              <TabsList className="grid w-full grid-cols-3 rounded-full mb-12 h-auto p-1.5 bg-muted">
+                <TabsTrigger value="profile" className="rounded-full gap-2 py-3 px-4 data-[state=active]:bg-background data-[state=active]:shadow-sm">
                   <User className="w-5 h-5" />
                   Profile
                 </TabsTrigger>
-                <TabsTrigger value="favorites" className="rounded-xl gap-2 py-3 px-4">
+                <TabsTrigger value="favorites" className="rounded-full gap-2 py-3 px-4 data-[state=active]:bg-background data-[state=active]:shadow-sm">
                   <Heart className="w-5 h-5" />
                   Favorites
                 </TabsTrigger>
-                <TabsTrigger value="subscription" className="rounded-xl gap-2 py-3 px-4">
+                <TabsTrigger value="subscription" className="rounded-full gap-2 py-3 px-4 data-[state=active]:bg-background data-[state=active]:shadow-sm">
                   <Crown className="w-5 h-5" />
                   Subscription
                 </TabsTrigger>
@@ -303,7 +303,7 @@ export default function SettingsPage() {
 
               {/* Profile Tab */}
               <TabsContent value="profile">
-                <Card className="rounded-2xl">
+                <Card className="rounded-3xl">
                   <CardHeader>
                     <CardTitle className="flex items-center gap-2">
                       <User className="w-5 h-5" />
@@ -396,7 +396,7 @@ export default function SettingsPage() {
 
               {/* Favorites Tab */}
               <TabsContent value="favorites">
-                <Card className="rounded-2xl">
+                <Card className="rounded-3xl">
                   <CardHeader>
                     <CardTitle className="flex items-center gap-2">
                       <Heart className="w-5 h-5" />
@@ -505,7 +505,7 @@ export default function SettingsPage() {
 
               {/* Subscription Tab */}
               <TabsContent value="subscription">
-                <Card className="rounded-2xl">
+                <Card className="rounded-3xl">
                   <CardHeader>
                     <CardTitle className="flex items-center gap-2">
                       <Crown className="w-5 h-5" />
