@@ -17,7 +17,6 @@ import {
 import { useAuth } from '@/hooks/use-auth';
 import { useFavorites } from '@/hooks/use-favorites';
 import { AuthModal } from './auth-modal';
-import { ProfileModal } from './profile-modal';
 import { 
   Menu, 
   User, 
@@ -38,23 +37,11 @@ const navLinks = [
 export function Navigation() {
   const [isOpen, setIsOpen] = useState(false);
   const [authModalOpen, setAuthModalOpen] = useState(false);
-  const [profileModalOpen, setProfileModalOpen] = useState(false);
-  const [activeTab, setActiveTab] = useState('profile');
   const { user, signOut, isSubscribed } = useAuth();
   const { favorites } = useFavorites();
 
   const handleSignOut = async () => {
     await signOut();
-  };
-
-  const openFavorites = () => {
-    setActiveTab('favorites');
-    setProfileModalOpen(true);
-  };
-
-  const openProfile = () => {
-    setActiveTab('profile');
-    setProfileModalOpen(true);
   };
 
   const getInitials = (name: string | null | undefined) => {
@@ -93,20 +80,21 @@ export function Navigation() {
           <div className="hidden md:flex items-center gap-3">
             {user ? (
               <>
-                <Button 
-                  variant="ghost" 
-                  size="sm" 
-                  className="gap-2"
-                  onClick={openFavorites}
-                >
-                  <Heart className="h-4 w-4" />
-                  Favorites
-                  {favorites.size > 0 && (
-                    <Badge variant="secondary" className="ml-1 h-5 w-5 p-0 flex items-center justify-center text-xs rounded-full">
-                      {favorites.size}
-                    </Badge>
-                  )}
-                </Button>
+                <Link href="/settings?tab=favorites">
+                  <Button 
+                    variant="ghost" 
+                    size="sm" 
+                    className="gap-2"
+                  >
+                    <Heart className="h-4 w-4" />
+                    Favorites
+                    {favorites.size > 0 && (
+                      <Badge variant="secondary" className="ml-1 h-5 w-5 p-0 flex items-center justify-center text-xs rounded-full">
+                        {favorites.size}
+                      </Badge>
+                    )}
+                  </Button>
+                </Link>
                 {isSubscribed && (
                   <Badge variant="secondary" className="gap-1 rounded-full">
                     <Crown className="w-3 h-3" />
@@ -132,22 +120,28 @@ export function Navigation() {
                       </div>
                     </DropdownMenuLabel>
                     <DropdownMenuSeparator />
-                    <DropdownMenuItem className="gap-2 rounded-lg cursor-pointer" onClick={openProfile}>
-                      <User className="h-4 w-4" />
-                      Profile
+                    <DropdownMenuItem className="gap-2 rounded-lg cursor-pointer" asChild>
+                      <Link href="/settings?tab=profile">
+                        <User className="h-4 w-4" />
+                        Profile
+                      </Link>
                     </DropdownMenuItem>
-                    <DropdownMenuItem className="gap-2 rounded-lg cursor-pointer" onClick={openFavorites}>
-                      <Heart className="h-4 w-4" />
-                      Favorites
-                      {favorites.size > 0 && (
-                        <Badge variant="secondary" className="ml-auto h-5 w-5 p-0 flex items-center justify-center text-xs rounded-full">
-                          {favorites.size}
-                        </Badge>
-                      )}
+                    <DropdownMenuItem className="gap-2 rounded-lg cursor-pointer" asChild>
+                      <Link href="/settings?tab=favorites">
+                        <Heart className="h-4 w-4" />
+                        Favorites
+                        {favorites.size > 0 && (
+                          <Badge variant="secondary" className="ml-auto h-5 w-5 p-0 flex items-center justify-center text-xs rounded-full">
+                            {favorites.size}
+                          </Badge>
+                        )}
+                      </Link>
                     </DropdownMenuItem>
-                    <DropdownMenuItem className="gap-2 rounded-lg cursor-pointer" onClick={openProfile}>
-                      <Settings className="h-4 w-4" />
-                      Settings
+                    <DropdownMenuItem className="gap-2 rounded-lg cursor-pointer" asChild>
+                      <Link href="/settings?tab=subscription">
+                        <Settings className="h-4 w-4" />
+                        Subscription
+                      </Link>
                     </DropdownMenuItem>
                     <DropdownMenuSeparator />
                     <DropdownMenuItem className="gap-2 rounded-lg text-red-600 cursor-pointer" onClick={handleSignOut}>
@@ -215,27 +209,29 @@ export function Navigation() {
                           <p className="text-sm text-muted-foreground">{user.email}</p>
                         </div>
                       </div>
-                      <Button 
-                        variant="outline" 
-                        className="w-full justify-start gap-2 rounded-xl" 
-                        onClick={() => { setIsOpen(false); openProfile(); }}
-                      >
-                        <User className="h-4 w-4" />
-                        Profile Settings
-                      </Button>
-                      <Button 
-                        variant="outline" 
-                        className="w-full justify-start gap-2 rounded-xl"
-                        onClick={() => { setIsOpen(false); openFavorites(); }}
-                      >
-                        <Heart className="h-4 w-4" />
-                        Favorites
-                        {favorites.size > 0 && (
-                          <Badge variant="secondary" className="ml-auto h-5 w-5 p-0 flex items-center justify-center text-xs rounded-full">
-                            {favorites.size}
-                          </Badge>
-                        )}
-                      </Button>
+                      <Link href="/settings?tab=profile" onClick={() => setIsOpen(false)}>
+                        <Button 
+                          variant="outline" 
+                          className="w-full justify-start gap-2 rounded-xl" 
+                        >
+                          <User className="h-4 w-4" />
+                          Profile Settings
+                        </Button>
+                      </Link>
+                      <Link href="/settings?tab=favorites" onClick={() => setIsOpen(false)}>
+                        <Button 
+                          variant="outline" 
+                          className="w-full justify-start gap-2 rounded-xl"
+                        >
+                          <Heart className="h-4 w-4" />
+                          Favorites
+                          {favorites.size > 0 && (
+                            <Badge variant="secondary" className="ml-auto h-5 w-5 p-0 flex items-center justify-center text-xs rounded-full">
+                              {favorites.size}
+                            </Badge>
+                          )}
+                        </Button>
+                      </Link>
                       <Button variant="outline" className="w-full justify-start gap-2 rounded-xl text-red-600" onClick={handleSignOut}>
                         <LogOut className="h-4 w-4" />
                         Sign Out
@@ -261,7 +257,6 @@ export function Navigation() {
       </header>
 
       <AuthModal open={authModalOpen} onOpenChange={setAuthModalOpen} />
-      <ProfileModal open={profileModalOpen} onOpenChange={setProfileModalOpen} defaultTab={activeTab} />
     </>
   );
 }
