@@ -24,8 +24,8 @@ export function LiveSessionCard({ session }: LiveSessionCardProps) {
   const isToday = format(scheduledDate, 'yyyy-MM-dd') === format(new Date(), 'yyyy-MM-dd');
   
   const cardContent = (
-    <Card className={`group overflow-hidden border-0 shadow-lg hover:shadow-xl transition-all duration-300 rounded-2xl bg-card ${session.isLive ? 'cursor-pointer' : ''}`}>
-      <div className="relative aspect-video overflow-hidden">
+    <Card className={`group overflow-hidden border-0 shadow-lg hover:shadow-xl transition-all duration-300 rounded-2xl bg-card p-0 ${session.isLive ? 'cursor-pointer' : ''}`}>
+      <div className="relative aspect-video overflow-hidden rounded-t-2xl">
         {/* Thumbnail */}
         <div className="absolute inset-0 bg-gradient-to-br from-primary/20 to-secondary/30">
           {session.thumbnail ? (
