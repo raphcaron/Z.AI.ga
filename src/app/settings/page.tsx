@@ -283,20 +283,20 @@ export default function SettingsPage() {
         </section>
 
         {/* Content */}
-        <section className="py-8">
+        <section className="py-12">
           <div className="container mx-auto px-4">
             <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-              <TabsList className="grid w-full grid-cols-3 rounded-xl mb-8">
-                <TabsTrigger value="profile" className="rounded-xl gap-2">
-                  <User className="w-4 h-4" />
+              <TabsList className="grid w-full grid-cols-3 rounded-xl mb-12 h-auto p-1.5">
+                <TabsTrigger value="profile" className="rounded-xl gap-2 py-3 px-4">
+                  <User className="w-5 h-5" />
                   Profile
                 </TabsTrigger>
-                <TabsTrigger value="favorites" className="rounded-xl gap-2">
-                  <Heart className="w-4 h-4" />
+                <TabsTrigger value="favorites" className="rounded-xl gap-2 py-3 px-4">
+                  <Heart className="w-5 h-5" />
                   Favorites
                 </TabsTrigger>
-                <TabsTrigger value="subscription" className="rounded-xl gap-2">
-                  <Crown className="w-4 h-4" />
+                <TabsTrigger value="subscription" className="rounded-xl gap-2 py-3 px-4">
+                  <Crown className="w-5 h-5" />
                   Subscription
                 </TabsTrigger>
               </TabsList>
