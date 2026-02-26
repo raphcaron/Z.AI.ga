@@ -1,11 +1,11 @@
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect } from 'react';
+import Link from 'next/link';
 import { Navigation } from '@/components/yoga/navigation';
 import { HeroSection } from '@/components/yoga/hero-section';
 import { LiveSessionCard } from '@/components/yoga/live-session-card';
 import { SessionCard } from '@/components/yoga/session-card';
-import { CategoryFilter, ThemeFilter } from '@/components/yoga/category-filter';
 import { Footer } from '@/components/yoga/footer';
 import { AuthModal } from '@/components/yoga/auth-modal';
 import { Badge } from '@/components/ui/badge';
@@ -23,19 +23,6 @@ interface Session {
   instructor: string | null;
   category: { name: string } | null;
   theme: { name: string; color: string | null } | null;
-}
-
-interface Category {
-  id: string;
-  name: string;
-  slug: string;
-  icon: string | null;
-}
-
-interface Theme {
-  id: string;
-  name: string;
-  color: string | null;
 }
 
 // Mock live sessions (for demo)
@@ -69,39 +56,20 @@ const mockLiveSessions = [
 
 export default function Home() {
   const [sessions, setSessions] = useState<Session[]>([]);
-  const [categories, setCategories] = useState<Category[]>([]);
-  const [themes, setThemes] = useState<Theme[]>([]);
   const [loading, setLoading] = useState(true);
-  
-  const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
-  const [selectedTheme, setSelectedTheme] = useState<string | null>(null);
   const [authModalOpen, setAuthModalOpen] = useState(false);
 
-  // Fetch data from Supabase
+  // Fetch recent sessions from Supabase
   useEffect(() => {
     async function fetchData() {
       try {
         setLoading(true);
         
-        // Fetch sessions
-        const sessionsRes = await fetch('/api/sessions');
+        // Fetch recent sessions (limit to 4 for homepage overview)
+        const sessionsRes = await fetch('/api/sessions?limit=4');
         if (sessionsRes.ok) {
           const data = await sessionsRes.json();
           setSessions(data.sessions || []);
-        }
-        
-        // Fetch categories
-        const categoriesRes = await fetch('/api/categories');
-        if (categoriesRes.ok) {
-          const data = await categoriesRes.json();
-          setCategories(data.categories || []);
-        }
-        
-        // Fetch themes
-        const themesRes = await fetch('/api/themes');
-        if (themesRes.ok) {
-          const data = await themesRes.json();
-          setThemes(data.themes || []);
         }
       } catch (error) {
         console.error('Error fetching data:', error);
@@ -112,22 +80,6 @@ export default function Home() {
     
     fetchData();
   }, []);
-
-  const filteredSessions = useMemo(() => {
-    let filtered = sessions;
-    
-    if (selectedCategory) {
-      const categoryName = categories.find(c => c.id === selectedCategory)?.name;
-      filtered = filtered.filter(s => s.category?.name === categoryName);
-    }
-    
-    if (selectedTheme) {
-      const themeName = themes.find(t => t.id === selectedTheme)?.name;
-      filtered = filtered.filter(s => s.theme?.name === themeName);
-    }
-    
-    return filtered;
-  }, [sessions, selectedCategory, selectedTheme, categories, themes]);
 
   return (
     <div className="min-h-screen flex flex-col bg-background">
@@ -164,20 +116,26 @@ export default function Home() {
           </div>
         </section>
 
-        {/* Session Library Section */}
-        <section id="library" className="py-16 md:py-20 bg-accent/10">
+        {/* Recent Classes Section */}
+        <section id="classes" className="py-16 md:py-20 bg-accent/10">
           <div className="container mx-auto px-4">
             <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 mb-8">
               <div>
                 <Badge variant="secondary" className="mb-3 px-3 py-1 rounded-full gap-1.5">
                   <Video className="w-3.5 h-3.5" />
-                  {sessions.length}+ Classes
+                  Recent Classes
                 </Badge>
                 <h2 className="text-2xl md:text-3xl font-bold">Class Library</h2>
                 <p className="text-muted-foreground mt-2">
                   Explore our collection of yoga classes for every level
                 </p>
               </div>
+              <Link href="/sessions">
+                <Button variant="outline" className="gap-2 rounded-full">
+                  View All Classes
+                  <ArrowRight className="w-4 h-4" />
+                </Button>
+              </Link>
             </div>
             
             {loading ? (
@@ -185,58 +143,26 @@ export default function Home() {
                 <Loader2 className="w-8 h-8 animate-spin text-primary" />
               </div>
             ) : (
-              <>
-                {/* Filters */}
-                <div className="flex flex-col gap-4 mb-8">
-                  <CategoryFilter 
-                    categories={categories}
-                    selectedCategory={selectedCategory}
-                    onSelectCategory={setSelectedCategory}
+              <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-6">
+                {sessions.map((session) => (
+                  <SessionCard 
+                    key={session.id} 
+                    session={session as {
+                      id: string;
+                      title: string;
+                      slug: string;
+                      description: string | null;
+                      thumbnail: string | null;
+                      duration: number;
+                      difficulty: 'beginner' | 'intermediate' | 'advanced';
+                      instructor: string | null;
+                      category?: { name: string } | null;
+                      theme?: { name: string; color: string | null } | null;
+                    }}
+                    onAuthRequired={() => setAuthModalOpen(true)}
                   />
-                  <ThemeFilter 
-                    themes={themes}
-                    selectedTheme={selectedTheme}
-                    onSelectTheme={setSelectedTheme}
-                  />
-                </div>
-                
-                {/* Session Grid */}
-                <div className="grid sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-                  {filteredSessions.map((session) => (
-                    <SessionCard 
-                      key={session.id} 
-                      session={session as {
-                        id: string;
-                        title: string;
-                        slug: string;
-                        description: string | null;
-                        thumbnail: string | null;
-                        duration: number;
-                        difficulty: 'beginner' | 'intermediate' | 'advanced';
-                        instructor: string | null;
-                        category?: { name: string } | null;
-                        theme?: { name: string; color: string | null } | null;
-                      }}
-                      onAuthRequired={() => setAuthModalOpen(true)}
-                    />
-                  ))}
-                </div>
-                
-                {filteredSessions.length === 0 && (
-                  <div className="text-center py-16">
-                    <p className="text-muted-foreground">No classes found matching your filters.</p>
-                    <Button 
-                      variant="link" 
-                      onClick={() => {
-                        setSelectedCategory(null);
-                        setSelectedTheme(null);
-                      }}
-                    >
-                      Clear filters
-                    </Button>
-                  </div>
-                )}
-              </>
+                ))}
+              </div>
             )}
           </div>
         </section>
