@@ -377,7 +377,7 @@ export default function SettingsPage() {
 
                       <Button
                         type="submit"
-                        className="w-full rounded-xl bg-primary hover:bg-primary/90"
+                        className="rounded-xl bg-primary hover:bg-primary/90"
                         disabled={loading}
                       >
                         {loading ? (
