@@ -137,7 +137,7 @@ export default function SessionsPage() {
         </section>
 
         {/* Filters Section */}
-        <section className="py-6 border-b border-border bg-card sticky top-0 z-10">
+        <section className="py-6 border-b border-border bg-card">
           <div className="container mx-auto px-4">
             <div className="flex flex-col gap-4">
               {/* Category Filter */}
