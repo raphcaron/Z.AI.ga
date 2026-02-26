@@ -284,7 +284,7 @@ export default function SettingsPage() {
 
         {/* Content */}
         <section className="py-8">
-          <div className="container mx-auto px-4 max-w-4xl">
+          <div className="container mx-auto px-4">
             <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
               <TabsList className="grid w-full grid-cols-3 rounded-xl mb-8">
                 <TabsTrigger value="profile" className="rounded-xl gap-2">
