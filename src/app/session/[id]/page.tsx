@@ -212,81 +212,6 @@ export default function SessionPage() {
       <main className="flex-1">
         {/* Video Player Section */}
         <div className="relative w-full bg-black aspect-video max-h-[70vh]">
-          {/* Video Placeholder / Thumbnail */}
-          <div 
-            className="absolute inset-0 bg-gradient-to-br from-gray-900 to-gray-800"
-            onMouseEnter={() => setShowControls(true)}
-            onMouseLeave={() => showControls && setShowControls(true)}
-          >
-            {session.thumbnail ? (
-              <img 
-                src={session.thumbnail} 
-                alt={session.title}
-                className={`w-full h-full object-cover transition-opacity ${isPlaying ? 'opacity-30' : 'opacity-50'}`}
-              />
-            ) : (
-              <div className="w-full h-full flex items-center justify-center">
-                <Play className="w-24 h-24 text-white/20" />
-              </div>
-            )}
-
-            {/* Play Button Overlay */}
-            {!isPlaying && (
-              <button
-                onClick={handlePlayPause}
-                className="absolute inset-0 flex items-center justify-center group"
-              >
-                <div className="w-20 h-20 rounded-full bg-primary/90 flex items-center justify-center backdrop-blur-sm transition-transform group-hover:scale-110">
-                  <Play className="w-10 h-10 text-primary-foreground ml-1" />
-                </div>
-              </button>
-            )}
-
-            {/* Video Controls */}
-            <div className={`absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent p-4 transition-opacity ${showControls ? 'opacity-100' : 'opacity-0'}`}>
-              {/* Progress Bar */}
-              <div 
-                className="w-full h-1 bg-white/30 rounded-full mb-4 cursor-pointer"
-                onClick={handleProgressClick}
-              >
-                <div 
-                  className="h-full bg-primary rounded-full transition-all"
-                  style={{ width: `${progress}%` }}
-                />
-              </div>
-
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-4">
-                  <button onClick={handlePlayPause} className="text-white hover:text-primary transition-colors">
-                    {isPlaying ? (
-                      <Pause className="w-6 h-6" />
-                    ) : (
-                      <Play className="w-6 h-6" />
-                    )}
-                  </button>
-                  
-                  <button onClick={handleMute} className="text-white hover:text-primary transition-colors">
-                    {isMuted ? (
-                      <VolumeX className="w-5 h-5" />
-                    ) : (
-                      <Volume2 className="w-5 h-5" />
-                    )}
-                  </button>
-
-                  <span className="text-white text-sm">
-                    {formatTime(currentTime)} / {formatTime(totalSeconds)}
-                  </span>
-                </div>
-
-                <div className="flex items-center gap-4">
-                  <button className="text-white hover:text-primary transition-colors">
-                    <Maximize className="w-5 h-5" />
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
-
           {/* Back Button */}
           <Link 
             href="/"
@@ -296,9 +221,86 @@ export default function SessionPage() {
             <span className="text-sm font-medium">Back</span>
           </Link>
 
-          {/* Paywall Overlay for non-logged-in users */}
-          {!user && (
-            <div className="absolute inset-0 z-20 bg-black/70 backdrop-blur-sm flex items-center justify-center">
+          {user ? (
+            <>
+              {/* Video Placeholder / Thumbnail - Only rendered for logged-in users */}
+              <div 
+                className="absolute inset-0 bg-gradient-to-br from-gray-900 to-gray-800"
+                onMouseEnter={() => setShowControls(true)}
+                onMouseLeave={() => showControls && setShowControls(true)}
+              >
+                {session.thumbnail ? (
+                  <img 
+                    src={session.thumbnail} 
+                    alt={session.title}
+                    className={`w-full h-full object-cover transition-opacity ${isPlaying ? 'opacity-30' : 'opacity-50'}`}
+                  />
+                ) : (
+                  <div className="w-full h-full flex items-center justify-center">
+                    <Play className="w-24 h-24 text-white/20" />
+                  </div>
+                )}
+
+                {/* Play Button Overlay */}
+                {!isPlaying && (
+                  <button
+                    onClick={handlePlayPause}
+                    className="absolute inset-0 flex items-center justify-center group"
+                  >
+                    <div className="w-20 h-20 rounded-full bg-primary/90 flex items-center justify-center backdrop-blur-sm transition-transform group-hover:scale-110">
+                      <Play className="w-10 h-10 text-primary-foreground ml-1" />
+                    </div>
+                  </button>
+                )}
+
+                {/* Video Controls */}
+                <div className={`absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent p-4 transition-opacity ${showControls ? 'opacity-100' : 'opacity-0'}`}>
+                  {/* Progress Bar */}
+                  <div 
+                    className="w-full h-1 bg-white/30 rounded-full mb-4 cursor-pointer"
+                    onClick={handleProgressClick}
+                  >
+                    <div 
+                      className="h-full bg-primary rounded-full transition-all"
+                      style={{ width: `${progress}%` }}
+                    />
+                  </div>
+
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-4">
+                      <button onClick={handlePlayPause} className="text-white hover:text-primary transition-colors">
+                        {isPlaying ? (
+                          <Pause className="w-6 h-6" />
+                        ) : (
+                          <Play className="w-6 h-6" />
+                        )}
+                      </button>
+                      
+                      <button onClick={handleMute} className="text-white hover:text-primary transition-colors">
+                        {isMuted ? (
+                          <VolumeX className="w-5 h-5" />
+                        ) : (
+                          <Volume2 className="w-5 h-5" />
+                        )}
+                      </button>
+
+                      <span className="text-white text-sm">
+                        {formatTime(currentTime)} / {formatTime(totalSeconds)}
+                      </span>
+                    </div>
+
+                    <div className="flex items-center gap-4">
+                      <button className="text-white hover:text-primary transition-colors">
+                        <Maximize className="w-5 h-5" />
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </>
+          ) : (
+            /* Paywall for non-logged-in users - NO video content rendered */
+            <div className="absolute inset-0 bg-gradient-to-br from-gray-900 to-gray-800 flex items-center justify-center">
               <div className="text-center px-6 py-8 max-w-md">
                 <div className="w-16 h-16 rounded-full bg-primary/20 flex items-center justify-center mx-auto mb-6">
                   <Lock className="w-8 h-8 text-primary" />

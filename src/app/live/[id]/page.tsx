@@ -211,57 +211,6 @@ export default function LiveSessionPage() {
           <div className="flex-1 flex flex-col">
             {/* Video Container */}
             <div className="relative flex-1 bg-black min-h-[300px] lg:min-h-[500px]">
-              {/* Video Placeholder / Thumbnail */}
-              <div className="absolute inset-0 bg-gradient-to-br from-gray-900 to-gray-800">
-                <div className="w-full h-full flex items-center justify-center">
-                  <Radio className="w-24 h-24 text-white/20" />
-                </div>
-
-                {/* Play Button Overlay */}
-                {!isPlaying && (
-                  <button
-                    onClick={handlePlayPause}
-                    className="absolute inset-0 flex items-center justify-center group"
-                  >
-                    <div className="w-20 h-20 rounded-full bg-red-500/90 flex items-center justify-center backdrop-blur-sm transition-transform group-hover:scale-110">
-                      <Play className="w-10 h-10 text-white ml-1" />
-                    </div>
-                  </button>
-                )}
-
-                {/* Video Controls */}
-                <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent p-4">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-4">
-                      <button onClick={handlePlayPause} className="text-white hover:text-red-400 transition-colors">
-                        {isPlaying ? (
-                          <Pause className="w-6 h-6" />
-                        ) : (
-                          <Play className="w-6 h-6" />
-                        )}
-                      </button>
-                      
-                      <button onClick={handleMute} className="text-white hover:text-red-400 transition-colors">
-                        {isMuted ? (
-                          <VolumeX className="w-5 h-5" />
-                        ) : (
-                          <Volume2 className="w-5 h-5" />
-                        )}
-                      </button>
-
-                      <button className="text-white hover:text-red-400 transition-colors">
-                        <Maximize className="w-5 h-5" />
-                      </button>
-                    </div>
-
-                    <div className="flex items-center gap-2 text-white text-sm">
-                      <Clock className="w-4 h-4" />
-                      <span>{formatLiveDuration(liveDuration)}</span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
               {/* Back Button */}
               <Link 
                 href="/"
@@ -271,7 +220,7 @@ export default function LiveSessionPage() {
                 <span className="text-sm font-medium">Back</span>
               </Link>
 
-              {/* Live Badge */}
+              {/* Live Badge - always visible */}
               <div className="absolute top-4 left-1/2 -translate-x-1/2 z-10">
                 <Badge className="bg-red-500 hover:bg-red-500 text-white gap-1.5 px-3 py-1">
                   <span className="w-2 h-2 bg-white rounded-full animate-pulse" />
@@ -279,7 +228,7 @@ export default function LiveSessionPage() {
                 </Badge>
               </div>
 
-              {/* Viewer Count */}
+              {/* Viewer Count - always visible */}
               <div className="absolute top-4 right-4 z-10">
                 <div className="flex items-center gap-2 bg-black/40 px-3 py-1.5 rounded-full text-white text-sm">
                   <Eye className="w-4 h-4" />
@@ -287,9 +236,62 @@ export default function LiveSessionPage() {
                 </div>
               </div>
 
-              {/* Paywall Overlay for non-logged-in users */}
-              {!user && (
-                <div className="absolute inset-0 z-20 bg-black/70 backdrop-blur-sm flex items-center justify-center">
+              {user ? (
+                <>
+                  {/* Video Placeholder / Thumbnail - Only rendered for logged-in users */}
+                  <div className="absolute inset-0 bg-gradient-to-br from-gray-900 to-gray-800">
+                    <div className="w-full h-full flex items-center justify-center">
+                      <Radio className="w-24 h-24 text-white/20" />
+                    </div>
+
+                    {/* Play Button Overlay */}
+                    {!isPlaying && (
+                      <button
+                        onClick={handlePlayPause}
+                        className="absolute inset-0 flex items-center justify-center group"
+                      >
+                        <div className="w-20 h-20 rounded-full bg-red-500/90 flex items-center justify-center backdrop-blur-sm transition-transform group-hover:scale-110">
+                          <Play className="w-10 h-10 text-white ml-1" />
+                        </div>
+                      </button>
+                    )}
+
+                    {/* Video Controls */}
+                    <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent p-4">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-4">
+                          <button onClick={handlePlayPause} className="text-white hover:text-red-400 transition-colors">
+                            {isPlaying ? (
+                              <Pause className="w-6 h-6" />
+                            ) : (
+                              <Play className="w-6 h-6" />
+                            )}
+                          </button>
+                          
+                          <button onClick={handleMute} className="text-white hover:text-red-400 transition-colors">
+                            {isMuted ? (
+                              <VolumeX className="w-5 h-5" />
+                            ) : (
+                              <Volume2 className="w-5 h-5" />
+                            )}
+                          </button>
+
+                          <button className="text-white hover:text-red-400 transition-colors">
+                            <Maximize className="w-5 h-5" />
+                          </button>
+                        </div>
+
+                        <div className="flex items-center gap-2 text-white text-sm">
+                          <Clock className="w-4 h-4" />
+                          <span>{formatLiveDuration(liveDuration)}</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </>
+              ) : (
+                /* Paywall for non-logged-in users - NO video content rendered */
+                <div className="absolute inset-0 bg-gradient-to-br from-gray-900 to-gray-800 flex items-center justify-center">
                   <div className="text-center px-6 py-8 max-w-md">
                     <div className="w-16 h-16 rounded-full bg-red-500/20 flex items-center justify-center mx-auto mb-6">
                       <Lock className="w-8 h-8 text-red-400" />

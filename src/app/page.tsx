@@ -6,7 +6,6 @@ import { HeroSection } from '@/components/yoga/hero-section';
 import { LiveSessionCard } from '@/components/yoga/live-session-card';
 import { SessionCard } from '@/components/yoga/session-card';
 import { CategoryFilter, ThemeFilter } from '@/components/yoga/category-filter';
-import { PricingSection } from '@/components/yoga/pricing-section';
 import { Footer } from '@/components/yoga/footer';
 import { AuthModal } from '@/components/yoga/auth-modal';
 import { Badge } from '@/components/ui/badge';
@@ -242,7 +241,6 @@ export default function Home() {
           </div>
         </section>
 
-        <PricingSection />
       </main>
       
       <Footer />
