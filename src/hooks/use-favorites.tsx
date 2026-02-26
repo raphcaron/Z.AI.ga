@@ -126,8 +126,8 @@ export function FavoritesProvider({ children }: { children: ReactNode }) {
   }, [user]);
 
   const isFavorite = useCallback((sessionId: string) => {
-    return favoritesRef.current.has(sessionId);
-  }, []);
+    return favorites.has(sessionId);
+  }, [favorites]);
 
   return (
     <FavoritesContext.Provider value={{ 
