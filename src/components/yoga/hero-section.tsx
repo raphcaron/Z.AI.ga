@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Play, Sparkles, ArrowRight } from 'lucide-react';
@@ -44,10 +45,12 @@ export function HeroSection() {
               <Play className="h-5 w-5" />
               Start Free Trial
             </Button>
-            <Button size="lg" variant="outline" className="gap-2 px-8 rounded-full">
-              Explore Library
-              <ArrowRight className="h-4 w-4" />
-            </Button>
+            <Link href="/sessions">
+              <Button size="lg" variant="outline" className="gap-2 px-8 rounded-full">
+                Explore Library
+                <ArrowRight className="h-4 w-4" />
+              </Button>
+            </Link>
           </div>
 
           {/* Stats */}
