@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import Link from 'next/link';
 import {
   Dialog,
   DialogContent,
@@ -375,16 +376,14 @@ export function ProfileModal({ open, onOpenChange, defaultTab = 'profile' }: Pro
                       Save your favorite classes by clicking the heart icon on any session
                     </p>
                   </div>
-                  <Button 
-                    variant="outline"
-                    className="rounded-xl"
-                    onClick={() => {
-                      onOpenChange(false);
-                      document.getElementById('library')?.scrollIntoView({ behavior: 'smooth' });
-                    }}
-                  >
-                    Browse Classes
-                  </Button>
+                  <Link href="/sessions" onClick={() => onOpenChange(false)}>
+                    <Button 
+                      variant="outline"
+                      className="rounded-xl"
+                    >
+                      Browse Classes
+                    </Button>
+                  </Link>
                 </div>
               ) : (
                 <div className="space-y-3">
@@ -554,15 +553,11 @@ export function ProfileModal({ open, onOpenChange, defaultTab = 'profile' }: Pro
                       Subscribe to get unlimited access to all classes and live sessions
                     </p>
                   </div>
-                  <Button 
-                    className="rounded-xl bg-primary hover:bg-primary/90"
-                    onClick={() => {
-                      onOpenChange(false);
-                      document.getElementById('pricing')?.scrollIntoView({ behavior: 'smooth' });
-                    }}
-                  >
-                    View Plans
-                  </Button>
+                  <Link href="/pricing" onClick={() => onOpenChange(false)}>
+                    <Button className="rounded-xl bg-primary hover:bg-primary/90">
+                      View Plans
+                    </Button>
+                  </Link>
                 </div>
               )}
 
