@@ -30,9 +30,9 @@ import {
 } from 'lucide-react';
 
 const navLinks = [
-  { href: '#library', label: 'Library' },
-  { href: '#live', label: 'Live Sessions' },
-  { href: '#pricing', label: 'Pricing' },
+  { href: '/sessions', label: 'Library' },
+  { href: '/#live', label: 'Live Sessions' },
+  { href: '/pricing', label: 'Pricing' },
 ];
 
 export function Navigation() {
