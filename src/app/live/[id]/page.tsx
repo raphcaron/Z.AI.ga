@@ -310,9 +310,9 @@ export default function LiveSessionPage() {
                         </Button>
                       </Link>
                       <Button 
-                        variant="outline" 
+                        variant="secondary" 
                         size="lg" 
-                        className="rounded-xl w-full sm:w-auto text-white border-white/30 hover:bg-white/10"
+                        className="rounded-xl w-full sm:w-auto bg-white/10 text-white border border-white/30 hover:bg-white/20"
                         onClick={() => setAuthModalOpen(true)}
                       >
                         Sign In
