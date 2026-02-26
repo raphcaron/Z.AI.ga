@@ -221,7 +221,7 @@ export default function SessionPage() {
             <span className="text-sm font-medium">Back</span>
           </Link>
 
-          {user ? (
+          {user && isSubscribed ? (
             <>
               {/* Video Placeholder / Thumbnail - Only rendered for logged-in users */}
               <div 
@@ -299,7 +299,7 @@ export default function SessionPage() {
               </div>
             </>
           ) : (
-            /* Paywall for non-logged-in users - NO video content rendered */
+            /* Paywall for non-subscribers - NO video content rendered */
             <div className="absolute inset-0 bg-gradient-to-br from-gray-900 to-gray-800 flex items-center justify-center">
               <div className="text-center px-6 py-8 max-w-md">
                 <div className="w-16 h-16 rounded-full bg-primary/20 flex items-center justify-center mx-auto mb-6">

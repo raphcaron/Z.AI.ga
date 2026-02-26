@@ -42,7 +42,7 @@ interface ChatMessage {
 export default function LiveSessionPage() {
   const params = useParams();
   const router = useRouter();
-  const { user } = useAuth();
+  const { user, isSubscribed } = useAuth();
   
   const [loading, setLoading] = useState(true);
   const [authModalOpen, setAuthModalOpen] = useState(false);
@@ -236,9 +236,9 @@ export default function LiveSessionPage() {
                 </div>
               </div>
 
-              {user ? (
+              {user && isSubscribed ? (
                 <>
-                  {/* Video Placeholder / Thumbnail - Only rendered for logged-in users */}
+                  {/* Video Placeholder / Thumbnail - Only rendered for subscribers */}
                   <div className="absolute inset-0 bg-gradient-to-br from-gray-900 to-gray-800">
                     <div className="w-full h-full flex items-center justify-center">
                       <Radio className="w-24 h-24 text-white/20" />
@@ -290,7 +290,7 @@ export default function LiveSessionPage() {
                   </div>
                 </>
               ) : (
-                /* Paywall for non-logged-in users - NO video content rendered */
+                /* Paywall for non-subscribers - NO video content rendered */
                 <div className="absolute inset-0 bg-gradient-to-br from-gray-900 to-gray-800 flex items-center justify-center">
                   <div className="text-center px-6 py-8 max-w-md">
                     <div className="w-16 h-16 rounded-full bg-red-500/20 flex items-center justify-center mx-auto mb-6">
