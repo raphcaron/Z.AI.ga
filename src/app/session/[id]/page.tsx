@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
@@ -116,11 +116,14 @@ export default function SessionPage() {
   const [isAdmin, setIsAdmin] = useState(false);
   
   // Video player state
+  const videoRef = useRef<HTMLVideoElement>(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [isMuted, setIsMuted] = useState(false);
   const [progress, setProgress] = useState(0);
   const [currentTime, setCurrentTime] = useState(0);
+  const [duration, setDuration] = useState(0);
   const [showControls, setShowControls] = useState(true);
+  const [isFullscreen, setIsFullscreen] = useState(false);
   
   // Edit state
   const [editDialogOpen, setEditDialogOpen] = useState(false);
@@ -409,26 +412,69 @@ export default function SessionPage() {
     }
   };
 
+  // Video player handlers
   const handlePlayPause = () => {
+    if (!videoRef.current) return;
+    
+    if (isPlaying) {
+      videoRef.current.pause();
+    } else {
+      videoRef.current.play();
+    }
     setIsPlaying(!isPlaying);
   };
 
   const handleMute = () => {
+    if (!videoRef.current) return;
+    videoRef.current.muted = !isMuted;
     setIsMuted(!isMuted);
   };
 
-  const handleProgressClick = (e: React.MouseEvent<HTMLDivElement>) => {
-    const rect = e.currentTarget.getBoundingClientRect();
-    const x = e.clientX - rect.left;
-    const percentage = (x / rect.width) * 100;
-    setProgress(percentage);
-    if (session) {
-      setCurrentTime((percentage / 100) * session.duration * 60);
-      trackWatchHistory(Math.round(percentage));
+  const handleTimeUpdate = () => {
+    if (!videoRef.current) return;
+    const current = videoRef.current.currentTime;
+    const total = videoRef.current.duration || 0;
+    setCurrentTime(current);
+    if (total > 0) {
+      setProgress((current / total) * 100);
     }
   };
 
+  const handleLoadedMetadata = () => {
+    if (!videoRef.current) return;
+    setDuration(videoRef.current.duration);
+  };
+
+  const handleVideoEnd = () => {
+    setIsPlaying(false);
+  };
+
+  const handleProgressClick = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (!videoRef.current) return;
+    const rect = e.currentTarget.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const percentage = x / rect.width;
+    const newTime = percentage * videoRef.current.duration;
+    videoRef.current.currentTime = newTime;
+    setCurrentTime(newTime);
+    setProgress(percentage * 100);
+    trackWatchHistory(Math.round(percentage * 100));
+  };
+
+  const handleFullscreen = () => {
+    const container = videoRef.current?.parentElement;
+    if (!container) return;
+    
+    if (!isFullscreen) {
+      container.requestFullscreen?.();
+    } else {
+      document.exitFullscreen?.();
+    }
+    setIsFullscreen(!isFullscreen);
+  };
+
   const formatTime = (seconds: number) => {
+    if (isNaN(seconds)) return '0:00';
     const mins = Math.floor(seconds / 60);
     const secs = Math.floor(seconds % 60);
     return `${mins}:${secs.toString().padStart(2, '0')}`;
@@ -467,7 +513,8 @@ export default function SessionPage() {
     );
   }
 
-  const totalSeconds = session.duration * 60;
+  // Check if video URL exists
+  const hasVideo = !!session.video_url;
 
   return (
     <div className="min-h-screen flex flex-col bg-background">
@@ -479,35 +526,34 @@ export default function SessionPage() {
           {/* Back Button */}
           <Link 
             href="/"
-            className="absolute top-4 left-4 z-10 flex items-center gap-2 text-white/80 hover:text-white transition-colors"
+            className="absolute top-4 left-4 z-20 flex items-center gap-2 text-white/80 hover:text-white transition-colors"
           >
             <ArrowLeft className="w-5 h-5" />
             <span className="text-sm font-medium">Back</span>
           </Link>
 
           {user && isSubscribed ? (
-            <>
-              <div 
-                className="absolute inset-0 bg-gradient-to-br from-gray-900 to-gray-800"
-                onMouseEnter={() => setShowControls(true)}
-                onMouseLeave={() => showControls && setShowControls(true)}
-              >
-                {session.thumbnail ? (
-                  <img 
-                    src={session.thumbnail} 
-                    alt={session.title}
-                    className={`w-full h-full object-cover transition-opacity ${isPlaying ? 'opacity-30' : 'opacity-50'}`}
-                  />
-                ) : (
-                  <div className="w-full h-full flex items-center justify-center">
-                    <Play className="w-24 h-24 text-white/20" />
-                  </div>
-                )}
+            hasVideo ? (
+              <>
+                {/* Real Video Player */}
+                <video
+                  ref={videoRef}
+                  src={session.video_url || undefined}
+                  poster={session.thumbnail || undefined}
+                  className="w-full h-full object-contain bg-black"
+                  onTimeUpdate={handleTimeUpdate}
+                  onLoadedMetadata={handleLoadedMetadata}
+                  onEnded={handleVideoEnd}
+                  onPlay={() => setIsPlaying(true)}
+                  onPause={() => setIsPlaying(false)}
+                  onClick={handlePlayPause}
+                />
 
+                {/* Play/Pause Overlay */}
                 {!isPlaying && (
                   <button
                     onClick={handlePlayPause}
-                    className="absolute inset-0 flex items-center justify-center group"
+                    className="absolute inset-0 flex items-center justify-center group z-10"
                   >
                     <div className="w-20 h-20 rounded-full bg-primary/90 flex items-center justify-center backdrop-blur-sm transition-transform group-hover:scale-110">
                       <Play className="w-10 h-10 text-primary-foreground ml-1" />
@@ -515,9 +561,14 @@ export default function SessionPage() {
                   </button>
                 )}
 
-                <div className={`absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent p-4 transition-opacity ${showControls ? 'opacity-100' : 'opacity-0'}`}>
+                {/* Controls */}
+                <div 
+                  className={`absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent p-4 transition-opacity z-10 ${showControls ? 'opacity-100' : 'opacity-0'}`}
+                  onMouseEnter={() => setShowControls(true)}
+                >
+                  {/* Progress Bar */}
                   <div 
-                    className="w-full h-1 bg-white/30 rounded-full mb-4 cursor-pointer"
+                    className="w-full h-1 bg-white/30 rounded-full mb-4 cursor-pointer hover:h-2 transition-all"
                     onClick={handleProgressClick}
                   >
                     <div 
@@ -545,19 +596,38 @@ export default function SessionPage() {
                       </button>
 
                       <span className="text-white text-sm">
-                        {formatTime(currentTime)} / {formatTime(totalSeconds)}
+                        {formatTime(currentTime)} / {formatTime(duration || session.duration * 60)}
                       </span>
                     </div>
 
                     <div className="flex items-center gap-4">
-                      <button className="text-white hover:text-primary transition-colors">
+                      <button onClick={handleFullscreen} className="text-white hover:text-primary transition-colors">
                         <Maximize className="w-5 h-5" />
                       </button>
                     </div>
                   </div>
                 </div>
+              </>
+            ) : (
+              /* No Video - Show placeholder */
+              <div className="absolute inset-0 bg-gradient-to-br from-gray-900 to-gray-800 flex items-center justify-center">
+                <div className="text-center px-6 py-8">
+                  {session.thumbnail ? (
+                    <img 
+                      src={session.thumbnail} 
+                      alt={session.title}
+                      className="w-full h-full object-cover opacity-50 absolute inset-0"
+                    />
+                  ) : (
+                    <Play className="w-24 h-24 text-white/20" />
+                  )}
+                  <div className="relative z-10">
+                    <p className="text-white/70 text-lg">Video coming soon</p>
+                    <p className="text-white/50 text-sm mt-2">This class hasn't been uploaded yet</p>
+                  </div>
+                </div>
               </div>
-            </>
+            )
           ) : (
             <div className="absolute inset-0 bg-gradient-to-br from-gray-900 to-gray-800 flex items-center justify-center">
               <div className="text-center px-6 py-8 max-w-md">
