@@ -53,6 +53,7 @@ import {
   Tag,
   Palette,
   Users,
+  Eye,
 } from 'lucide-react';
 import { format } from 'date-fns';
 
@@ -1077,6 +1078,16 @@ export default function AdminPage() {
                                 <Button
                                   variant="outline"
                                   size="sm"
+                                  asChild
+                                  className="rounded-lg"
+                                >
+                                  <a href={`/session/${session.id}`} target="_blank" rel="noopener noreferrer">
+                                    <Eye className="w-4 h-4" />
+                                  </a>
+                                </Button>
+                                <Button
+                                  variant="outline"
+                                  size="sm"
                                   onClick={() => togglePublished(session)}
                                   className="rounded-lg"
                                 >
@@ -1209,6 +1220,17 @@ export default function AdminPage() {
 
                                 {/* Actions */}
                                 <div className="flex items-center gap-2">
+                                  {/* View Button */}
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    asChild
+                                    className="rounded-lg"
+                                  >
+                                    <a href={`/session/${session.id}`} target="_blank" rel="noopener noreferrer">
+                                      <Eye className="w-4 h-4" />
+                                    </a>
+                                  </Button>
                                   {/* Go Live Toggle */}
                                   <Button
                                     variant={session.streamingNow ? "destructive" : "default"}
@@ -1310,6 +1332,16 @@ export default function AdminPage() {
 
                                 {/* Actions */}
                                 <div className="flex items-center gap-2">
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    asChild
+                                    className="rounded-lg"
+                                  >
+                                    <a href={`/session/${session.id}`} target="_blank" rel="noopener noreferrer">
+                                      <Eye className="w-4 h-4" />
+                                    </a>
+                                  </Button>
                                   <Button
                                     variant="outline"
                                     size="sm"
