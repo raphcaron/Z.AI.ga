@@ -25,7 +25,8 @@ import {
   Sparkles,
   LogOut,
   Settings,
-  Crown
+  Crown,
+  Shield
 } from 'lucide-react';
 
 const navLinks = [
@@ -143,6 +144,12 @@ export function Navigation() {
                         Subscription
                       </Link>
                     </DropdownMenuItem>
+                    <DropdownMenuItem className="gap-2 rounded-lg cursor-pointer" asChild>
+                      <Link href="/admin">
+                        <Shield className="h-4 w-4" />
+                        Admin
+                      </Link>
+                    </DropdownMenuItem>
                     <DropdownMenuSeparator />
                     <DropdownMenuItem className="gap-2 rounded-lg text-red-600 cursor-pointer" onClick={handleSignOut}>
                       <LogOut className="h-4 w-4" />
@@ -230,6 +237,15 @@ export function Navigation() {
                               {favorites.size}
                             </Badge>
                           )}
+                        </Button>
+                      </Link>
+                      <Link href="/admin" onClick={() => setIsOpen(false)}>
+                        <Button 
+                          variant="outline" 
+                          className="w-full justify-start gap-2 rounded-xl"
+                        >
+                          <Shield className="h-4 w-4" />
+                          Admin
                         </Button>
                       </Link>
                       <Button variant="outline" className="w-full justify-start gap-2 rounded-xl text-red-600" onClick={handleSignOut}>
