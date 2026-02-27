@@ -86,6 +86,63 @@ export default function SessionPage() {
     }
   }, [sessionId]);
 
+  // Track watch history when session loads
+  useEffect(() => {
+    if (session && user) {
+      trackWatchHistory(0);
+    }
+  }, [session, user]);
+
+  // Update watch history progress periodically
+  useEffect(() => {
+    if (!session || !user || !isPlaying) return;
+
+    const interval = setInterval(() => {
+      const newProgress = Math.min(progress + (100 / (session.duration * 60)) * 5, 100);
+      setProgress(newProgress);
+      setCurrentTime((newProgress / 100) * session.duration * 60);
+      trackWatchHistory(Math.round(newProgress));
+    }, 5000);
+
+    return () => clearInterval(interval);
+  }, [session, user, isPlaying, progress]);
+
+  const trackWatchHistory = async (progressValue: number) => {
+    if (!session || !user) return;
+
+    try {
+      // Check if watch history entry exists
+      const { data: existing } = await supabase
+        .from('watch_history')
+        .select('id')
+        .eq('user_id', user.id)
+        .eq('session_id', session.id)
+        .single();
+
+      if (existing?.id) {
+        // Update existing entry
+        await supabase
+          .from('watch_history')
+          .update({ 
+            progress: progressValue,
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', existing.id);
+      } else {
+        // Create new entry
+        await supabase
+          .from('watch_history')
+          .insert({
+            user_id: user.id,
+            session_id: session.id,
+            progress: progressValue,
+          });
+      }
+    } catch (error) {
+      console.error('Error tracking watch history:', error);
+    }
+  };
+
   const loadSession = async () => {
     setLoading(true);
     try {
@@ -161,6 +218,7 @@ export default function SessionPage() {
     setProgress(percentage);
     if (session) {
       setCurrentTime((percentage / 100) * session.duration * 60);
+      trackWatchHistory(Math.round(percentage));
     }
   };
 

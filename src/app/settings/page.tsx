@@ -30,10 +30,13 @@ import {
   Heart,
   ArrowLeft,
   Settings,
-  Sparkles
+  Sparkles,
+  Clock,
+  Play,
+  Trash2
 } from 'lucide-react';
 import { Switch } from '@/components/ui/switch';
-import { format } from 'date-fns';
+import { format, formatDistanceToNow } from 'date-fns';
 
 interface SubscriptionData {
   id: string;
@@ -54,6 +57,24 @@ interface FavoriteSession {
     difficulty: string;
     instructor: string | null;
   };
+}
+
+interface WatchHistoryItem {
+  id: string;
+  session_id: string;
+  progress: number;
+  updated_at: string;
+  sessions: {
+    id: string;
+    title: string;
+    slug: string;
+    thumbnail: string | null;
+    duration: number;
+    difficulty: string;
+    instructor: string | null;
+    category: { name: string } | null;
+    theme: { name: string; color: string | null } | null;
+  } | null;
 }
 
 export default function SettingsPage() {
@@ -77,13 +98,17 @@ export default function SettingsPage() {
   const [favoriteSessions, setFavoriteSessions] = useState<FavoriteSession[]>([]);
   const [loadingFavorites, setLoadingFavorites] = useState(false);
 
+  // Watch history state
+  const [watchHistory, setWatchHistory] = useState<WatchHistoryItem[]>([]);
+  const [loadingHistory, setLoadingHistory] = useState(false);
+
   // Tab from URL
   const tabParam = searchParams.get('tab');
   const [activeTab, setActiveTab] = useState(tabParam || 'profile');
 
   // Update tab when URL changes
   useEffect(() => {
-    if (tabParam && ['profile', 'favorites', 'subscription'].includes(tabParam)) {
+    if (tabParam && ['profile', 'favorites', 'history', 'subscription'].includes(tabParam)) {
       setActiveTab(tabParam);
     }
   }, [tabParam]);
@@ -107,6 +132,7 @@ export default function SettingsPage() {
     if (user) {
       loadSubscription();
       loadFavoriteSessions();
+      loadWatchHistory();
     }
   }, [user]);
 
@@ -172,6 +198,70 @@ export default function SettingsPage() {
       setFavoriteSessions([]);
     } finally {
       setLoadingFavorites(false);
+    }
+  };
+
+  const loadWatchHistory = async () => {
+    if (!user) return;
+    setLoadingHistory(true);
+    try {
+      const { data, error } = await supabase
+        .from('watch_history')
+        .select(`
+          id,
+          session_id,
+          progress,
+          updated_at,
+          sessions (
+            id,
+            title,
+            slug,
+            thumbnail,
+            duration,
+            difficulty,
+            instructor,
+            category:categories ( name ),
+            theme:themes ( name, color )
+          )
+        `)
+        .eq('user_id', user.id)
+        .order('updated_at', { ascending: false })
+        .limit(20);
+      
+      if (error) {
+        console.error('Error loading watch history:', error);
+        setWatchHistory([]);
+      } else {
+        setWatchHistory(data || []);
+      }
+    } catch (error) {
+      console.error('Error loading watch history:', error);
+      setWatchHistory([]);
+    } finally {
+      setLoadingHistory(false);
+    }
+  };
+
+  const handleClearHistory = async () => {
+    if (!user) return;
+    
+    if (!confirm('Are you sure you want to clear your watch history?')) {
+      return;
+    }
+    
+    try {
+      const { error } = await supabase
+        .from('watch_history')
+        .delete()
+        .eq('user_id', user.id);
+      
+      if (error) throw error;
+      
+      setWatchHistory([]);
+      setMessage({ type: 'success', text: 'Watch history cleared!' });
+    } catch (error) {
+      console.error('Error clearing history:', error);
+      setMessage({ type: 'error', text: 'Failed to clear history' });
     }
   };
 
@@ -331,7 +421,7 @@ export default function SettingsPage() {
               <h1 className="text-3xl md:text-4xl font-bold">Account Settings</h1>
             </div>
             <p className="text-muted-foreground">
-              Manage your profile, favorites, and subscription
+              Manage your profile, favorites, history, and subscription
             </p>
           </div>
         </section>
@@ -340,18 +430,22 @@ export default function SettingsPage() {
         <section className="py-12">
           <div className="container mx-auto px-4">
             <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-              <TabsList className="grid w-full grid-cols-3 rounded-full mb-12 h-auto p-1.5 bg-muted">
+              <TabsList className="grid w-full grid-cols-4 rounded-full mb-12 h-auto p-1.5 bg-muted">
                 <TabsTrigger value="profile" className="rounded-full gap-2 py-3 px-4 data-[state=active]:bg-background data-[state=active]:shadow-sm">
                   <User className="w-5 h-5" />
-                  Profile
+                  <span className="hidden sm:inline">Profile</span>
                 </TabsTrigger>
                 <TabsTrigger value="favorites" className="rounded-full gap-2 py-3 px-4 data-[state=active]:bg-background data-[state=active]:shadow-sm">
                   <Heart className="w-5 h-5" />
-                  Favorites
+                  <span className="hidden sm:inline">Favorites</span>
+                </TabsTrigger>
+                <TabsTrigger value="history" className="rounded-full gap-2 py-3 px-4 data-[state=active]:bg-background data-[state=active]:shadow-sm">
+                  <Clock className="w-5 h-5" />
+                  <span className="hidden sm:inline">History</span>
                 </TabsTrigger>
                 <TabsTrigger value="subscription" className="rounded-full gap-2 py-3 px-4 data-[state=active]:bg-background data-[state=active]:shadow-sm">
                   <Crown className="w-5 h-5" />
-                  Subscription
+                  <span className="hidden sm:inline">Subscription</span>
                 </TabsTrigger>
               </TabsList>
 
@@ -497,6 +591,125 @@ export default function SettingsPage() {
                             }}
                           />
                         ))}
+                      </div>
+                    </>
+                  )}
+                </div>
+              </TabsContent>
+
+              {/* History Tab */}
+              <TabsContent value="history">
+                <div className="space-y-6">
+                  {loadingHistory ? (
+                    <div className="flex items-center justify-center py-16">
+                      <Loader2 className="w-8 h-8 animate-spin text-primary" />
+                    </div>
+                  ) : watchHistory.length === 0 ? (
+                    <Card className="rounded-3xl">
+                      <CardContent className="py-16">
+                        <div className="text-center space-y-6">
+                          <div className="inline-flex p-4 rounded-full bg-primary/10">
+                            <Clock className="w-10 h-10 text-primary" />
+                          </div>
+                          <div>
+                            <h3 className="font-semibold text-lg mb-2">No Watch History</h3>
+                            <p className="text-muted-foreground text-sm">
+                              Your recently watched classes will appear here
+                            </p>
+                          </div>
+                          <Link href="/sessions">
+                            <Button variant="outline" className="rounded-xl">
+                              Start Watching
+                            </Button>
+                          </Link>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ) : (
+                    <>
+                      <div className="flex items-center justify-between">
+                        <p className="text-sm text-muted-foreground">
+                          {watchHistory.length} recently watched {watchHistory.length === 1 ? 'class' : 'classes'}
+                        </p>
+                        <Button 
+                          variant="ghost" 
+                          size="sm" 
+                          className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                          onClick={handleClearHistory}
+                        >
+                          <Trash2 className="w-4 h-4 mr-2" />
+                          Clear History
+                        </Button>
+                      </div>
+                      <div className="space-y-3">
+                        {watchHistory.map((item) => {
+                          const session = item.sessions;
+                          if (!session) return null;
+                          
+                          return (
+                            <Link
+                              key={item.id}
+                              href={`/session/${session.slug || session.id}`}
+                              className="flex items-center gap-4 p-4 rounded-2xl bg-muted/50 hover:bg-muted transition-colors group"
+                            >
+                              {/* Thumbnail */}
+                              <div className="relative w-32 h-20 rounded-xl overflow-hidden flex-shrink-0 bg-gradient-to-br from-primary/10 to-secondary/20">
+                                {session.thumbnail ? (
+                                  <img src={session.thumbnail} alt={session.title} className="w-full h-full object-cover" />
+                                ) : (
+                                  <div className="w-full h-full flex items-center justify-center">
+                                    <Play className="w-8 h-8 text-primary/30" />
+                                  </div>
+                                )}
+                                {/* Progress overlay */}
+                                {item.progress > 0 && (
+                                  <div className="absolute bottom-0 left-0 right-0 h-1 bg-black/50">
+                                    <div 
+                                      className="h-full bg-primary"
+                                      style={{ width: `${Math.min(item.progress, 100)}%` }}
+                                    />
+                                  </div>
+                                )}
+                                {/* Play icon overlay */}
+                                <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity bg-black/30">
+                                  <div className="w-10 h-10 rounded-full bg-white/90 flex items-center justify-center">
+                                    <Play className="w-5 h-5 text-primary ml-0.5" />
+                                  </div>
+                                </div>
+                              </div>
+
+                              {/* Info */}
+                              <div className="flex-1 min-w-0">
+                                <h3 className="font-semibold line-clamp-1 mb-1">{session.title}</h3>
+                                <div className="flex items-center gap-3 text-sm text-muted-foreground">
+                                  <span>{session.duration} min</span>
+                                  <span className="capitalize">{session.difficulty}</span>
+                                  {session.instructor && <span>by {session.instructor}</span>}
+                                </div>
+                                <div className="flex items-center gap-2 mt-2">
+                                  {item.progress > 0 && item.progress < 100 && (
+                                    <Badge variant="secondary" className="text-xs">
+                                      {item.progress}% watched
+                                    </Badge>
+                                  )}
+                                  {item.progress >= 100 && (
+                                    <Badge className="text-xs bg-green-500 hover:bg-green-500">
+                                      Completed
+                                    </Badge>
+                                  )}
+                                  <span className="text-xs text-muted-foreground">
+                                    {formatDistanceToNow(new Date(item.updated_at), { addSuffix: true })}
+                                  </span>
+                                </div>
+                              </div>
+
+                              {/* Arrow */}
+                              <div className="text-muted-foreground group-hover:text-foreground transition-colors">
+                                <ArrowLeft className="w-5 h-5 rotate-180" />
+                              </div>
+                            </Link>
+                          );
+                        })}
                       </div>
                     </>
                   )}
