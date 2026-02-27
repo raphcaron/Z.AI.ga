@@ -52,7 +52,6 @@ import {
   Image as ImageIcon,
   Tag,
   Palette,
-  FolderOpen,
 } from 'lucide-react';
 import { format } from 'date-fns';
 
@@ -850,7 +849,7 @@ export default function AdminPage() {
             )}
 
             <Tabs defaultValue="videos" className="w-full">
-              <TabsList className="grid w-full grid-cols-3 rounded-full mb-8 h-auto p-1.5 bg-muted">
+              <TabsList className="grid w-full grid-cols-2 rounded-full mb-8 h-auto p-1.5 bg-muted">
                 <TabsTrigger value="videos" className="rounded-full gap-2 py-3 px-4 data-[state=active]:bg-background data-[state=active]:shadow-sm">
                   <Video className="w-5 h-5" />
                   Videos
@@ -858,10 +857,6 @@ export default function AdminPage() {
                 <TabsTrigger value="live" className="rounded-full gap-2 py-3 px-4 data-[state=active]:bg-background data-[state=active]:shadow-sm">
                   <RadioTower className="w-5 h-5" />
                   Live Sessions
-                </TabsTrigger>
-                <TabsTrigger value="categories" className="rounded-full gap-2 py-3 px-4 data-[state=active]:bg-background data-[state=active]:shadow-sm">
-                  <FolderOpen className="w-5 h-5" />
-                  Categories & Themes
                 </TabsTrigger>
               </TabsList>
 
@@ -1222,141 +1217,6 @@ export default function AdminPage() {
                   </Card>
                 </div>
               </TabsContent>
-
-              {/* Categories & Themes Tab */}
-              <TabsContent value="categories">
-                <div className="grid md:grid-cols-2 gap-6">
-                  {/* Categories Card */}
-                  <Card className="rounded-3xl">
-                    <CardHeader>
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <CardTitle className="flex items-center gap-2">
-                            <Tag className="w-5 h-5" />
-                            Categories
-                          </CardTitle>
-                          <CardDescription>Yoga class categories</CardDescription>
-                        </div>
-                        <Button onClick={() => openCategoryDialog(null)} size="sm" className="gap-2 rounded-xl">
-                          <Plus className="w-4 h-4" />
-                          Add
-                        </Button>
-                      </div>
-                    </CardHeader>
-                    <CardContent>
-                      {loading ? (
-                        <div className="flex items-center justify-center py-8">
-                          <Loader2 className="w-6 h-6 animate-spin text-primary" />
-                        </div>
-                      ) : (
-                        <div className="space-y-2">
-                          {categories.map((category) => (
-                            <div
-                              key={category.id}
-                              className="flex items-center gap-3 p-3 rounded-xl bg-muted/50 hover:bg-muted transition-colors"
-                            >
-                              <div className="flex-1 min-w-0">
-                                <div className="font-medium">{category.name}</div>
-                                <div className="text-xs text-muted-foreground">{category.slug}</div>
-                              </div>
-                              <div className="flex items-center gap-1">
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  onClick={() => openCategoryDialog(category)}
-                                  className="rounded-lg"
-                                >
-                                  <Pencil className="w-4 h-4" />
-                                </Button>
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  onClick={() => handleDeleteCategory(category)}
-                                  className="rounded-lg text-destructive hover:bg-destructive/10"
-                                >
-                                  <Trash2 className="w-4 h-4" />
-                                </Button>
-                              </div>
-                            </div>
-                          ))}
-                          {categories.length === 0 && (
-                            <div className="text-center py-8 text-muted-foreground">
-                              No categories yet. Click "Add" to create one.
-                            </div>
-                          )}
-                        </div>
-                      )}
-                    </CardContent>
-                  </Card>
-
-                  {/* Themes Card */}
-                  <Card className="rounded-3xl">
-                    <CardHeader>
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <CardTitle className="flex items-center gap-2">
-                            <Palette className="w-5 h-5" />
-                            Themes
-                          </CardTitle>
-                          <CardDescription>Class themes and focuses</CardDescription>
-                        </div>
-                        <Button onClick={() => openThemeDialog(null)} size="sm" className="gap-2 rounded-xl">
-                          <Plus className="w-4 h-4" />
-                          Add
-                        </Button>
-                      </div>
-                    </CardHeader>
-                    <CardContent>
-                      {loading ? (
-                        <div className="flex items-center justify-center py-8">
-                          <Loader2 className="w-6 h-6 animate-spin text-primary" />
-                        </div>
-                      ) : (
-                        <div className="space-y-2">
-                          {themes.map((theme) => (
-                            <div
-                              key={theme.id}
-                              className="flex items-center gap-3 p-3 rounded-xl bg-muted/50 hover:bg-muted transition-colors"
-                            >
-                              <div
-                                className="w-4 h-4 rounded-full flex-shrink-0"
-                                style={{ backgroundColor: theme.color || '#6366F1' }}
-                              />
-                              <div className="flex-1 min-w-0">
-                                <div className="font-medium">{theme.name}</div>
-                                <div className="text-xs text-muted-foreground">{theme.slug}</div>
-                              </div>
-                              <div className="flex items-center gap-1">
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  onClick={() => openThemeDialog(theme)}
-                                  className="rounded-lg"
-                                >
-                                  <Pencil className="w-4 h-4" />
-                                </Button>
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  onClick={() => handleDeleteTheme(theme)}
-                                  className="rounded-lg text-destructive hover:bg-destructive/10"
-                                >
-                                  <Trash2 className="w-4 h-4" />
-                                </Button>
-                              </div>
-                            </div>
-                          ))}
-                          {themes.length === 0 && (
-                            <div className="text-center py-8 text-muted-foreground">
-                              No themes yet. Click "Add" to create one.
-                            </div>
-                          )}
-                        </div>
-                      )}
-                    </CardContent>
-                  </Card>
-                </div>
-              </TabsContent>
             </Tabs>
           </div>
         </section>
@@ -1562,42 +1422,98 @@ export default function AdminPage() {
             <div className="grid grid-cols-2 gap-4">
               {/* Category */}
               <div className="grid gap-2">
-                <Label htmlFor="category">Category</Label>
-                <Select
-                  value={formData.categoryId}
-                  onValueChange={(value) => setFormData({ ...formData, categoryId: value })}
-                >
-                  <SelectTrigger className="rounded-xl">
-                    <SelectValue placeholder="Select category" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {categories.map((category) => (
-                      <SelectItem key={category.id} value={category.id}>
-                        {category.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <div className="flex items-center justify-between">
+                  <Label htmlFor="category">Category</Label>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => openCategoryDialog(null)}
+                    className="h-6 px-2 text-xs gap-1"
+                  >
+                    <Plus className="w-3 h-3" />
+                    Add
+                  </Button>
+                </div>
+                <div className="flex gap-2">
+                  <Select
+                    value={formData.categoryId}
+                    onValueChange={(value) => setFormData({ ...formData, categoryId: value })}
+                  >
+                    <SelectTrigger className="rounded-xl flex-1">
+                      <SelectValue placeholder="Select category" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {categories.map((category) => (
+                        <SelectItem key={category.id} value={category.id}>
+                          {category.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  {formData.categoryId && (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="icon"
+                      onClick={() => {
+                        const cat = categories.find(c => c.id === formData.categoryId);
+                        if (cat) openCategoryDialog(cat);
+                      }}
+                      className="rounded-xl flex-shrink-0"
+                    >
+                      <Pencil className="w-4 h-4" />
+                    </Button>
+                  )}
+                </div>
               </div>
 
               {/* Theme */}
               <div className="grid gap-2">
-                <Label htmlFor="theme">Theme</Label>
-                <Select
-                  value={formData.themeId}
-                  onValueChange={(value) => setFormData({ ...formData, themeId: value })}
-                >
-                  <SelectTrigger className="rounded-xl">
-                    <SelectValue placeholder="Select theme" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {themes.map((theme) => (
-                      <SelectItem key={theme.id} value={theme.id}>
-                        {theme.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <div className="flex items-center justify-between">
+                  <Label htmlFor="theme">Theme</Label>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => openThemeDialog(null)}
+                    className="h-6 px-2 text-xs gap-1"
+                  >
+                    <Plus className="w-3 h-3" />
+                    Add
+                  </Button>
+                </div>
+                <div className="flex gap-2">
+                  <Select
+                    value={formData.themeId}
+                    onValueChange={(value) => setFormData({ ...formData, themeId: value })}
+                  >
+                    <SelectTrigger className="rounded-xl flex-1">
+                      <SelectValue placeholder="Select theme" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {themes.map((theme) => (
+                        <SelectItem key={theme.id} value={theme.id}>
+                          {theme.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  {formData.themeId && (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="icon"
+                      onClick={() => {
+                        const th = themes.find(t => t.id === formData.themeId);
+                        if (th) openThemeDialog(th);
+                      }}
+                      className="rounded-xl flex-shrink-0"
+                    >
+                      <Pencil className="w-4 h-4" />
+                    </Button>
+                  )}
+                </div>
               </div>
             </div>
 
