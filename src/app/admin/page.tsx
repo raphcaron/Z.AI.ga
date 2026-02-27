@@ -157,12 +157,15 @@ export default function AdminPage() {
   const [editingTheme, setEditingTheme] = useState<Theme | null>(null);
   const [categoryForm, setCategoryForm] = useState({ name: '', slug: '', description: '' });
   const [themeForm, setThemeForm] = useState({ name: '', slug: '', description: '', color: '#6366F1' });
+  const [claimingAdmin, setClaimingAdmin] = useState(false);
 
   // Check if user is admin (strict check - must have is_admin: true in user_metadata)
   const isAdmin = user?.user_metadata?.is_admin === true;
 
   useEffect(() => {
+    console.log('🔐 Admin auth check - authLoading:', authLoading, 'user:', !!user);
     if (!authLoading && !user) {
+      console.log('🔐 No user, redirecting to home');
       router.push('/');
     }
   }, [user, authLoading, router]);
@@ -174,60 +177,36 @@ export default function AdminPage() {
   }, [user]);
 
   const fetchData = async () => {
+    console.log('📊 Admin fetchData called');
     setLoading(true);
     try {
-      // Fetch sessions
-      const { data: sessionsData, error: sessionsError } = await supabase
-        .from('sessions')
-        .select(`
-          id,
-          title,
-          slug,
-          description,
-          thumbnail,
-          video_url,
-          duration,
-          difficulty,
-          instructor,
-          is_live,
-          live_at,
-          is_published,
-          streaming_now,
-          category_id,
-          theme_id,
-          created_at,
-          category:categories ( name ),
-          theme:themes ( name )
-        `)
-        .order('created_at', { ascending: false });
-
-      if (sessionsError) {
-        console.error('Error fetching sessions:', sessionsError);
-      }
-
-      // Fetch categories
-      const { data: categoriesData, error: categoriesError } = await supabase
-        .from('categories')
-        .select('id, name, slug, description')
-        .order('name');
+      // Get session token
+      const { data: { session } } = await supabase.auth.getSession();
       
-      if (categoriesError) {
-        console.error('Error fetching categories:', categoriesError);
+      if (!session?.access_token) {
+        console.error('No session token available');
+        setLoading(false);
+        return;
       }
-      console.log('📊 Categories fetched:', categoriesData?.length || 0, categoriesData);
-
-      // Fetch themes
-      const { data: themesData, error: themesError } = await supabase
-        .from('themes')
-        .select('id, name, slug, description, color')
-        .order('name');
       
-      if (themesError) {
-        console.error('Error fetching themes:', themesError);
+      // Fetch all admin data from API
+      const response = await fetch('/api/admin/sessions', {
+        headers: {
+          'Authorization': `Bearer ${session.access_token}`,
+        },
+      });
+      
+      if (!response.ok) {
+        const error = await response.json();
+        console.error('Failed to fetch admin data:', error);
+        setLoading(false);
+        return;
       }
-      console.log('📊 Themes fetched:', themesData?.length || 0, themesData);
-
-      setSessions((sessionsData || []).map((s: any) => ({
+      
+      const data = await response.json();
+      console.log('📊 Admin data fetched - sessions:', data.sessions?.length || 0);
+      
+      setSessions((data.sessions || []).map((s: any) => ({
         id: s.id,
         title: s.title,
         slug: s.slug,
@@ -247,8 +226,8 @@ export default function AdminPage() {
         theme: s.theme,
         createdAt: s.created_at,
       })));
-      setCategories(categoriesData || []);
-      setThemes(themesData || []);
+      setCategories(data.categories || []);
+      setThemes(data.themes || []);
     } catch (error) {
       console.error('Error fetching data:', error);
     } finally {
@@ -277,14 +256,27 @@ export default function AdminPage() {
   };
 
   const toggleUserAdmin = async (userId: string, currentIsAdmin: boolean) => {
+    console.log('=== toggleUserAdmin called ===', { userId, currentIsAdmin });
     try {
-      const { data: { session } } = await supabase.auth.getSession();
+      // Get fresh session - need to await properly
+      const sessionResult = await supabase.auth.getSession();
+      const session = sessionResult.data.session;
+      
+      console.log('Session:', session ? 'exists' : 'null');
+      console.log('Access token:', session?.access_token ? `${session.access_token.substring(0, 20)}...` : 'MISSING');
+      
+      if (!session?.access_token) {
+        setMessage({ type: 'error', text: 'Session expired. Please log out and log back in.' });
+        return;
+      }
+      
+      console.log('Sending POST request with token...');
       
       const response = await fetch('/api/users', {
-        method: 'PATCH',
+        method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${session?.access_token || ''}`,
+          'Authorization': `Bearer ${session.access_token}`,
         },
         body: JSON.stringify({
           userId,
@@ -292,13 +284,64 @@ export default function AdminPage() {
         }),
       });
       
+      const result = await response.json();
+      console.log('POST response:', response.status, result);
+      
       if (response.ok) {
         setMessage({ type: 'success', text: 'User admin status updated!' });
         loadUsers();
+      } else {
+        setMessage({ type: 'error', text: result.error || 'Failed to update user' });
       }
     } catch (error) {
       console.error('Error updating user:', error);
       setMessage({ type: 'error', text: 'Failed to update user' });
+    }
+  };
+
+  // Claim admin status (only works if no admin exists)
+  const claimAdmin = async () => {
+    try {
+      setClaimingAdmin(true);
+      
+      // Get fresh session
+      const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+      
+      if (sessionError) {
+        console.error('Session error:', sessionError);
+        setMessage({ type: 'error', text: 'Session error. Please try logging out and back in.' });
+        return;
+      }
+      
+      console.log('Claim admin - session:', !!session, 'user from hook:', !!user);
+      
+      if (!session?.access_token) {
+        setMessage({ type: 'error', text: 'Please log out and log back in, then try again.' });
+        return;
+      }
+      
+      const response = await fetch('/api/users/claim-admin', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${session.access_token}`,
+        },
+      });
+      
+      const result = await response.json();
+      console.log('Claim admin result:', result);
+      
+      if (response.ok) {
+        setMessage({ type: 'success', text: result.message || 'Admin claimed! Refreshing...' });
+        // Refresh the page to get updated user metadata
+        setTimeout(() => window.location.reload(), 1500);
+      } else {
+        setMessage({ type: 'error', text: result.error || 'Failed to claim admin' });
+      }
+    } catch (error) {
+      console.error('Error claiming admin:', error);
+      setMessage({ type: 'error', text: 'Failed to claim admin' });
+    } finally {
+      setClaimingAdmin(false);
     }
   };
 
@@ -865,19 +908,35 @@ export default function AdminPage() {
                   Manage videos, live sessions, categories, and themes
                 </p>
               </div>
-              <Button 
-                onClick={handleSeedData} 
-                disabled={seeding}
-                variant="outline"
-                className="gap-2 rounded-xl"
-              >
-                {seeding ? (
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                ) : (
-                  <Plus className="w-4 h-4" />
+              <div className="flex items-center gap-3">
+                {!isAdmin && (
+                  <Button 
+                    onClick={claimAdmin} 
+                    disabled={claimingAdmin}
+                    className="gap-2 rounded-xl bg-amber-500 hover:bg-amber-600"
+                  >
+                    {claimingAdmin ? (
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                    ) : (
+                      <Shield className="w-4 h-4" />
+                    )}
+                    Claim Admin
+                  </Button>
                 )}
-                Seed Demo Data
-              </Button>
+                <Button 
+                  onClick={handleSeedData} 
+                  disabled={seeding}
+                  variant="outline"
+                  className="gap-2 rounded-xl"
+                >
+                  {seeding ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <Plus className="w-4 h-4" />
+                  )}
+                  Seed Demo Data
+                </Button>
+              </div>
             </div>
           </div>
         </section>

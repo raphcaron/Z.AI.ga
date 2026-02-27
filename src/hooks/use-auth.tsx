@@ -110,6 +110,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       options: {
         data: {
           name,
+          is_admin: false, // Default to non-admin
         },
       },
     });
