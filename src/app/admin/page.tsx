@@ -52,6 +52,7 @@ import {
   Image as ImageIcon,
   Tag,
   Palette,
+  Users,
 } from 'lucide-react';
 import { format } from 'date-fns';
 
@@ -91,6 +92,14 @@ interface Theme {
   color: string | null;
 }
 
+interface User {
+  id: string;
+  email: string;
+  created_at: string;
+  last_sign_in_at: string | null;
+  is_admin: boolean;
+}
+
 const difficultyOptions = ['beginner', 'intermediate', 'advanced'];
 
 const videoSortOptions = [
@@ -105,6 +114,7 @@ export default function AdminPage() {
   const [sessions, setSessions] = useState<Session[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [themes, setThemes] = useState<Theme[]>([]);
+  const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
@@ -243,6 +253,52 @@ export default function AdminPage() {
       console.error('Error fetching data:', error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const loadUsers = async () => {
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      
+      const response = await fetch('/api/users', {
+        headers: {
+          'Authorization': `Bearer ${session?.access_token || ''}`,
+        },
+      });
+      
+      const result = await response.json();
+      
+      if (response.ok) {
+        setUsers(result.users || []);
+      }
+    } catch (error) {
+      console.error('Error loading users:', error);
+    }
+  };
+
+  const toggleUserAdmin = async (userId: string, currentIsAdmin: boolean) => {
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      
+      const response = await fetch('/api/users', {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session?.access_token || ''}`,
+        },
+        body: JSON.stringify({
+          userId,
+          isAdmin: !currentIsAdmin,
+        }),
+      });
+      
+      if (response.ok) {
+        setMessage({ type: 'success', text: 'User admin status updated!' });
+        loadUsers();
+      }
+    } catch (error) {
+      console.error('Error updating user:', error);
+      setMessage({ type: 'error', text: 'Failed to update user' });
     }
   };
 
@@ -849,7 +905,7 @@ export default function AdminPage() {
             )}
 
             <Tabs defaultValue="videos" className="w-full">
-              <TabsList className="grid w-full grid-cols-2 rounded-full mb-8 h-auto p-1.5 bg-muted">
+              <TabsList className="grid w-full grid-cols-3 rounded-full mb-8 h-auto p-1.5 bg-muted">
                 <TabsTrigger value="videos" className="rounded-full gap-2 py-3 px-4 data-[state=active]:bg-background data-[state=active]:shadow-sm">
                   <Video className="w-5 h-5" />
                   Videos
@@ -857,6 +913,10 @@ export default function AdminPage() {
                 <TabsTrigger value="live" className="rounded-full gap-2 py-3 px-4 data-[state=active]:bg-background data-[state=active]:shadow-sm">
                   <RadioTower className="w-5 h-5" />
                   Live Sessions
+                </TabsTrigger>
+                <TabsTrigger value="users" className="rounded-full gap-2 py-3 px-4 data-[state=active]:bg-background data-[state=active]:shadow-sm" onClick={loadUsers}>
+                  <Users className="w-5 h-5" />
+                  Users
                 </TabsTrigger>
               </TabsList>
 
@@ -1216,6 +1276,72 @@ export default function AdminPage() {
                     </CardContent>
                   </Card>
                 </div>
+              </TabsContent>
+
+              {/* Users Tab */}
+              <TabsContent value="users">
+                <Card className="rounded-3xl">
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      <Users className="w-5 h-5" />
+                      Users
+                    </CardTitle>
+                    <CardDescription>Manage user accounts and permissions</CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    {loading ? (
+                      <div className="flex items-center justify-center py-8">
+                        <Loader2 className="w-6 h-6 animate-spin text-primary" />
+                      </div>
+                    ) : users.length === 0 ? (
+                      <div className="text-center py-12 text-muted-foreground">
+                        <Users className="w-12 h-12 mx-auto mb-4 opacity-30" />
+                        <p>No users found. Click the tab to load users.</p>
+                        <Button onClick={loadUsers} variant="outline" className="mt-4 rounded-xl">
+                          Load Users
+                        </Button>
+                      </div>
+                    ) : (
+                      <div className="space-y-2">
+                        {users.map((u) => (
+                          <div
+                            key={u.id}
+                            className="flex items-center gap-4 p-4 rounded-xl bg-muted/50 hover:bg-muted transition-colors"
+                          >
+                            <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
+                              <User className="w-5 h-5 text-primary" />
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <div className="font-medium truncate">{u.email}</div>
+                              <div className="flex items-center gap-3 text-xs text-muted-foreground">
+                                <span>Joined {format(new Date(u.created_at), 'MMM d, yyyy')}</span>
+                                {u.last_sign_in_at && (
+                                  <span>Last login {format(new Date(u.last_sign_in_at), 'MMM d, yyyy')}</span>
+                                )}
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <Badge 
+                                variant={u.is_admin ? "default" : "secondary"}
+                                className="rounded-full"
+                              >
+                                {u.is_admin ? 'Admin' : 'User'}
+                              </Badge>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => toggleUserAdmin(u.id, u.is_admin)}
+                                className="rounded-lg"
+                              >
+                                {u.is_admin ? 'Remove Admin' : 'Make Admin'}
+                              </Button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
               </TabsContent>
             </Tabs>
           </div>
