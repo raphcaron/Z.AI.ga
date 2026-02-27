@@ -7,9 +7,27 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
 import { Navigation } from '@/components/yoga/navigation';
 import { Footer } from '@/components/yoga/footer';
 import { AuthModal } from '@/components/yoga/auth-modal';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from '@/components/ui/dialog';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { useAuth } from '@/hooks/use-auth';
 import { useFavorites } from '@/hooks/use-favorites';
 import { supabase } from '@/lib/supabase';
@@ -29,7 +47,14 @@ import {
   ChevronLeft,
   ChevronRight,
   Lock,
-  Crown
+  Crown,
+  Pencil,
+  Save,
+  X,
+  Plus,
+  Upload,
+  Image as ImageIcon,
+  Video,
 } from 'lucide-react';
 import { format } from 'date-fns';
 
@@ -45,6 +70,9 @@ interface Session {
   instructor: string | null;
   is_live: boolean;
   live_at: string | null;
+  is_published: boolean;
+  category_id: string | null;
+  theme_id: string | null;
   created_at: string;
   category: { name: string } | null;
   theme: { name: string; color: string | null } | null;
@@ -58,6 +86,21 @@ interface RelatedSession {
   difficulty: string;
   instructor: string | null;
 }
+
+interface Category {
+  id: string;
+  name: string;
+  slug: string;
+}
+
+interface Theme {
+  id: string;
+  name: string;
+  slug: string;
+  color: string | null;
+}
+
+const difficultyOptions = ['beginner', 'intermediate', 'advanced'];
 
 export default function SessionPage() {
   const params = useParams();
@@ -76,6 +119,25 @@ export default function SessionPage() {
   const [progress, setProgress] = useState(0);
   const [currentTime, setCurrentTime] = useState(0);
   const [showControls, setShowControls] = useState(true);
+  
+  // Edit state
+  const [editDialogOpen, setEditDialogOpen] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [themes, setThemes] = useState<Theme[]>([]);
+  const [formData, setFormData] = useState({
+    title: '',
+    description: '',
+    thumbnail: '',
+    videoUrl: '',
+    duration: 45,
+    difficulty: 'beginner',
+    instructor: '',
+    categoryId: '',
+    themeId: '',
+    isPublished: true,
+  });
+  const [uploadingThumbnail, setUploadingThumbnail] = useState(false);
   
   const sessionId = params.id as string;
   const isFavorited = session ? isFavorite(session.id) : false;
@@ -111,7 +173,6 @@ export default function SessionPage() {
     if (!session || !user) return;
 
     try {
-      // Check if watch history entry exists
       const { data: existing } = await supabase
         .from('watch_history')
         .select('id')
@@ -120,7 +181,6 @@ export default function SessionPage() {
         .single();
 
       if (existing?.id) {
-        // Update existing entry
         await supabase
           .from('watch_history')
           .update({ 
@@ -129,7 +189,6 @@ export default function SessionPage() {
           })
           .eq('id', existing.id);
       } else {
-        // Create new entry
         await supabase
           .from('watch_history')
           .insert({
@@ -160,6 +219,9 @@ export default function SessionPage() {
           instructor,
           is_live,
           live_at,
+          is_published,
+          category_id,
+          theme_id,
           created_at,
           category:categories ( name ),
           theme:themes ( name, color )
@@ -190,6 +252,100 @@ export default function SessionPage() {
       console.error('Error loading session:', error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const loadCategoriesAndThemes = async () => {
+    const { data: categoriesData } = await supabase
+      .from('categories')
+      .select('id, name, slug')
+      .order('name');
+    
+    const { data: themesData } = await supabase
+      .from('themes')
+      .select('id, name, slug, color')
+      .order('name');
+    
+    setCategories(categoriesData || []);
+    setThemes(themesData || []);
+  };
+
+  const openEditDialog = async () => {
+    if (!session) return;
+    
+    await loadCategoriesAndThemes();
+    
+    setFormData({
+      title: session.title,
+      description: session.description || '',
+      thumbnail: session.thumbnail || '',
+      videoUrl: session.video_url || '',
+      duration: session.duration,
+      difficulty: session.difficulty,
+      instructor: session.instructor || '',
+      categoryId: session.category_id || '',
+      themeId: session.theme_id || '',
+      isPublished: session.is_published,
+    });
+    setEditDialogOpen(true);
+  };
+
+  const handleSave = async () => {
+    if (!session || !formData.title) return;
+
+    setSaving(true);
+    try {
+      const { error } = await supabase
+        .from('sessions')
+        .update({
+          title: formData.title,
+          description: formData.description || null,
+          thumbnail: formData.thumbnail || null,
+          video_url: formData.videoUrl || null,
+          duration: formData.duration,
+          difficulty: formData.difficulty,
+          instructor: formData.instructor || null,
+          is_published: formData.isPublished,
+          category_id: formData.categoryId || null,
+          theme_id: formData.themeId || null,
+        })
+        .eq('id', session.id);
+
+      if (error) throw error;
+      
+      setEditDialogOpen(false);
+      loadSession();
+    } catch (error) {
+      console.error('Error saving session:', error);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleThumbnailUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !session) return;
+    
+    setUploadingThumbnail(true);
+    try {
+      const formDataUpload = new FormData();
+      formDataUpload.append('file', file);
+      formDataUpload.append('sessionId', session.id);
+      
+      const response = await fetch('/api/upload/thumbnail', {
+        method: 'POST',
+        body: formDataUpload,
+      });
+      
+      const data = await response.json();
+      
+      if (data.success) {
+        setFormData({ ...formData, thumbnail: data.url });
+      }
+    } catch (error) {
+      console.error('Error uploading thumbnail:', error);
+    } finally {
+      setUploadingThumbnail(false);
     }
   };
 
@@ -281,7 +437,6 @@ export default function SessionPage() {
 
           {user && isSubscribed ? (
             <>
-              {/* Video Placeholder / Thumbnail - Only rendered for logged-in users */}
               <div 
                 className="absolute inset-0 bg-gradient-to-br from-gray-900 to-gray-800"
                 onMouseEnter={() => setShowControls(true)}
@@ -299,7 +454,6 @@ export default function SessionPage() {
                   </div>
                 )}
 
-                {/* Play Button Overlay */}
                 {!isPlaying && (
                   <button
                     onClick={handlePlayPause}
@@ -311,9 +465,7 @@ export default function SessionPage() {
                   </button>
                 )}
 
-                {/* Video Controls */}
                 <div className={`absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent p-4 transition-opacity ${showControls ? 'opacity-100' : 'opacity-0'}`}>
-                  {/* Progress Bar */}
                   <div 
                     className="w-full h-1 bg-white/30 rounded-full mb-4 cursor-pointer"
                     onClick={handleProgressClick}
@@ -357,7 +509,6 @@ export default function SessionPage() {
               </div>
             </>
           ) : (
-            /* Paywall for non-subscribers - NO video content rendered */
             <div className="absolute inset-0 bg-gradient-to-br from-gray-900 to-gray-800 flex items-center justify-center">
               <div className="text-center px-6 py-8 max-w-md">
                 <div className="w-16 h-16 rounded-full bg-primary/20 flex items-center justify-center mx-auto mb-6">
@@ -427,6 +578,17 @@ export default function SessionPage() {
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
+                  {user && (
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      onClick={openEditDialog}
+                      className="rounded-full"
+                      title="Edit video"
+                    >
+                      <Pencil className="w-5 h-5" />
+                    </Button>
+                  )}
                   <Button
                     variant="outline"
                     size="icon"
@@ -553,6 +715,222 @@ export default function SessionPage() {
 
       <Footer />
       <AuthModal open={authModalOpen} onOpenChange={setAuthModalOpen} />
+
+      {/* Edit Dialog */}
+      <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
+        <DialogContent className="sm:max-w-2xl rounded-2xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Edit Video</DialogTitle>
+            <DialogDescription>
+              Update the details of this video session.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="grid gap-6 py-4">
+            {/* Title */}
+            <div className="grid gap-2">
+              <Label htmlFor="title">Title *</Label>
+              <Input
+                id="title"
+                value={formData.title}
+                onChange={(e) => setFormData({ ...formData, title: e.target.value })}
+                placeholder="Enter video title"
+                className="rounded-xl"
+              />
+            </div>
+
+            {/* Description */}
+            <div className="grid gap-2">
+              <Label htmlFor="description">Description</Label>
+              <Textarea
+                id="description"
+                value={formData.description}
+                onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                placeholder="Enter video description"
+                className="rounded-xl min-h-[100px]"
+              />
+            </div>
+
+            {/* Thumbnail Upload */}
+            <div className="grid gap-2">
+              <Label>Thumbnail</Label>
+              <div className="flex gap-3">
+                <div className="flex-1">
+                  <Input
+                    value={formData.thumbnail}
+                    onChange={(e) => setFormData({ ...formData, thumbnail: e.target.value })}
+                    placeholder="https://example.com/image.jpg or upload"
+                    className="rounded-xl"
+                  />
+                </div>
+                <div className="relative">
+                  <input
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp"
+                    onChange={handleThumbnailUpload}
+                    className="absolute inset-0 opacity-0 cursor-pointer"
+                    disabled={uploadingThumbnail}
+                  />
+                  <Button 
+                    type="button"
+                    variant="outline" 
+                    className="rounded-xl gap-2"
+                    disabled={uploadingThumbnail}
+                  >
+                    {uploadingThumbnail ? (
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                    ) : (
+                      <ImageIcon className="w-4 h-4" />
+                    )}
+                    Upload
+                  </Button>
+                </div>
+              </div>
+              {formData.thumbnail && (
+                <div className="mt-2 relative w-32 h-20 rounded-lg overflow-hidden bg-muted">
+                  <img src={formData.thumbnail} alt="Thumbnail preview" className="w-full h-full object-cover" />
+                </div>
+              )}
+            </div>
+
+            {/* Video URL */}
+            <div className="grid gap-2">
+              <Label>Video URL</Label>
+              <Input
+                value={formData.videoUrl}
+                onChange={(e) => setFormData({ ...formData, videoUrl: e.target.value })}
+                placeholder="https://example.com/video.mp4"
+                className="rounded-xl"
+              />
+              {formData.videoUrl && (
+                <p className="text-xs text-green-600 dark:text-green-400 mt-1 flex items-center gap-1">
+                  <Video className="w-3 h-3" />
+                  Video URL set
+                </p>
+              )}
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              {/* Duration */}
+              <div className="grid gap-2">
+                <Label htmlFor="duration">Duration (minutes)</Label>
+                <Input
+                  id="duration"
+                  type="number"
+                  value={formData.duration}
+                  onChange={(e) => setFormData({ ...formData, duration: parseInt(e.target.value) || 0 })}
+                  className="rounded-xl"
+                />
+              </div>
+
+              {/* Difficulty */}
+              <div className="grid gap-2">
+                <Label htmlFor="difficulty">Difficulty</Label>
+                <Select
+                  value={formData.difficulty}
+                  onValueChange={(value) => setFormData({ ...formData, difficulty: value })}
+                >
+                  <SelectTrigger className="rounded-xl">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {difficultyOptions.map((option) => (
+                      <SelectItem key={option} value={option} className="capitalize">
+                        {option}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            {/* Instructor */}
+            <div className="grid gap-2">
+              <Label htmlFor="instructor">Instructor</Label>
+              <Input
+                id="instructor"
+                value={formData.instructor}
+                onChange={(e) => setFormData({ ...formData, instructor: e.target.value })}
+                placeholder="Instructor name"
+                className="rounded-xl"
+              />
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              {/* Category */}
+              <div className="grid gap-2">
+                <Label htmlFor="category">Category</Label>
+                <Select
+                  value={formData.categoryId}
+                  onValueChange={(value) => setFormData({ ...formData, categoryId: value })}
+                >
+                  <SelectTrigger className="rounded-xl">
+                    <SelectValue placeholder="Select category" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {categories.map((category) => (
+                      <SelectItem key={category.id} value={category.id}>
+                        {category.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* Theme */}
+              <div className="grid gap-2">
+                <Label htmlFor="theme">Theme</Label>
+                <Select
+                  value={formData.themeId}
+                  onValueChange={(value) => setFormData({ ...formData, themeId: value })}
+                >
+                  <SelectTrigger className="rounded-xl">
+                    <SelectValue placeholder="Select theme" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {themes.map((theme) => (
+                      <SelectItem key={theme.id} value={theme.id}>
+                        {theme.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            {/* Published */}
+            <div className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                id="isPublished"
+                checked={formData.isPublished}
+                onChange={(e) => setFormData({ ...formData, isPublished: e.target.checked })}
+                className="rounded"
+              />
+              <Label htmlFor="isPublished">Published</Label>
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditDialogOpen(false)} className="rounded-xl">
+              Cancel
+            </Button>
+            <Button onClick={handleSave} disabled={saving} className="rounded-xl">
+              {saving ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  Saving...
+                </>
+              ) : (
+                <>
+                  <Save className="w-4 h-4 mr-2" />
+                  Save Changes
+                </>
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
