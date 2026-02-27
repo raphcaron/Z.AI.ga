@@ -10,7 +10,7 @@ import { AuthModal } from '@/components/yoga/auth-modal';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
-import { Video, Search, X, Loader2, Filter, ArrowLeft } from 'lucide-react';
+import { Video, Search, X, Loader2, Filter, ArrowLeft, Clock } from 'lucide-react';
 
 interface Session {
   id: string;
@@ -44,6 +44,12 @@ const difficultyOptions = [
   { value: 'advanced', label: 'Advanced', color: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400' },
 ];
 
+const durationOptions = [
+  { value: 'short', label: 'Short', sublabel: '< 30 min', color: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400' },
+  { value: 'medium', label: 'Medium', sublabel: '30-45 min', color: 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400' },
+  { value: 'long', label: 'Long', sublabel: '45+ min', color: 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400' },
+];
+
 export default function SessionsPage() {
   const [sessions, setSessions] = useState<Session[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
@@ -53,6 +59,7 @@ export default function SessionsPage() {
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [selectedTheme, setSelectedTheme] = useState<string | null>(null);
   const [selectedDifficulty, setSelectedDifficulty] = useState<string | null>(null);
+  const [selectedDuration, setSelectedDuration] = useState<string | null>(null);
   const [authModalOpen, setAuthModalOpen] = useState(false);
 
   // Fetch data from Supabase
@@ -103,9 +110,29 @@ export default function SessionsPage() {
     setSelectedCategory(null);
     setSelectedTheme(null);
     setSelectedDifficulty(null);
+    setSelectedDuration(null);
   };
 
-  const hasActiveFilters = selectedCategory || selectedTheme || selectedDifficulty;
+  const hasActiveFilters = selectedCategory || selectedTheme || selectedDifficulty || selectedDuration;
+
+  // Client-side filter for duration (since API doesn't support it yet)
+  const filteredSessions = useMemo(() => {
+    if (!selectedDuration) return sessions;
+    
+    return sessions.filter((session) => {
+      const duration = session.duration;
+      switch (selectedDuration) {
+        case 'short':
+          return duration < 30;
+        case 'medium':
+          return duration >= 30 && duration <= 45;
+        case 'long':
+          return duration > 45;
+        default:
+          return true;
+      }
+    });
+  }, [sessions, selectedDuration]);
 
   return (
     <div className="min-h-screen flex flex-col bg-background">
@@ -126,7 +153,7 @@ export default function SessionsPage() {
             <div className="flex items-center gap-3 mb-2">
               <Badge variant="secondary" className="px-3 py-1 rounded-full gap-1.5">
                 <Video className="w-3.5 h-3.5" />
-                {sessions.length} Classes
+                {filteredSessions.length} Classes
               </Badge>
             </div>
             <h1 className="text-3xl md:text-4xl font-bold mb-3">Class Library</h1>
@@ -182,6 +209,30 @@ export default function SessionsPage() {
                 </div>
               </div>
               
+              {/* Duration Filter */}
+              <div className="flex flex-col gap-2">
+                <span className="text-sm font-medium text-muted-foreground">Duration</span>
+                <div className="flex flex-wrap gap-2">
+                  {durationOptions.map((option) => (
+                    <button
+                      key={option.value}
+                      onClick={() => setSelectedDuration(
+                        selectedDuration === option.value ? null : option.value
+                      )}
+                      className={`px-4 py-2 rounded-full text-sm font-medium transition-all flex items-center gap-2 ${
+                        selectedDuration === option.value
+                          ? option.color + ' ring-2 ring-primary/50'
+                          : 'bg-muted hover:bg-muted/80 text-muted-foreground'
+                      }`}
+                    >
+                      <Clock className="w-3.5 h-3.5" />
+                      <span>{option.label}</span>
+                      <span className="text-xs opacity-70">({option.sublabel})</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+              
               {/* Clear Filters */}
               {hasActiveFilters && (
                 <div className="flex items-center gap-2 pt-2">
@@ -207,7 +258,7 @@ export default function SessionsPage() {
               <div className="flex items-center justify-center py-16">
                 <Loader2 className="w-8 h-8 animate-spin text-primary" />
               </div>
-            ) : sessions.length === 0 ? (
+            ) : filteredSessions.length === 0 ? (
               <div className="text-center py-16">
                 <div className="w-16 h-16 rounded-full bg-muted flex items-center justify-center mx-auto mb-4">
                   <Search className="w-8 h-8 text-muted-foreground" />
@@ -222,7 +273,7 @@ export default function SessionsPage() {
               </div>
             ) : (
               <div className="grid sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-                {sessions.map((session) => (
+                {filteredSessions.map((session) => (
                   <SessionCard 
                     key={session.id} 
                     session={session as {

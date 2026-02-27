@@ -129,7 +129,7 @@ export default function AdminPage() {
     setLoading(true);
     try {
       // Fetch sessions
-      const { data: sessionsData } = await supabase
+      const { data: sessionsData, error: sessionsError } = await supabase
         .from('sessions')
         .select(`
           id,
@@ -151,6 +151,12 @@ export default function AdminPage() {
           theme:themes ( name )
         `)
         .order('created_at', { ascending: false });
+
+      if (sessionsError) {
+        console.error('Error fetching sessions:', sessionsError);
+      }
+
+      console.log('Fetched sessions:', sessionsData?.length || 0, 'videos:', sessionsData?.filter((s: any) => !s.live_at).length || 0);
 
       // Fetch categories
       const { data: categoriesData } = await supabase

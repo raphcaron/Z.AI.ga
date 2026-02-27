@@ -1,14 +1,11 @@
 import { NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
-
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const supabaseServiceKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
-
-const supabase = createClient(supabaseUrl, supabaseServiceKey);
+import { getServerClient } from '@/lib/supabase';
 
 export async function GET(request: Request) {
   console.log('🔍 Sessions API called - using Supabase');
   try {
+    const supabase = getServerClient();
+    
     const { searchParams } = new URL(request.url);
     const categoryId = searchParams.get('categoryId');
     const themeId = searchParams.get('themeId');
