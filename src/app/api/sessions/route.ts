@@ -24,10 +24,12 @@ export async function GET(request: Request) {
         duration,
         difficulty,
         instructor,
+        created_at,
         category:categories ( name ),
         theme:themes ( name, color )
       `)
       .eq('is_published', true)
+      .is('live_at', null)
       .order('created_at', { ascending: false })
       .range(offset, offset + limit - 1);
 
@@ -57,10 +59,14 @@ export async function GET(request: Request) {
     const { count } = await supabase
       .from('sessions')
       .select('*', { count: 'exact', head: true })
-      .eq('is_published', true);
+      .eq('is_published', true)
+      .is('live_at', null);
 
     return NextResponse.json({
-      sessions: sessions || [],
+      sessions: (sessions || []).map((s: any) => ({
+        ...s,
+        createdAt: s.created_at,
+      })),
       pagination: {
         total: count || 0,
         limit,

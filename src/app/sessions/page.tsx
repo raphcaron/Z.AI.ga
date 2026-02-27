@@ -10,7 +10,7 @@ import { AuthModal } from '@/components/yoga/auth-modal';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Video, Search, X, Loader2, Filter, ArrowLeft, Clock } from 'lucide-react';
+import { Video, Search, X, Loader2, Filter, ArrowLeft, Clock, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react';
 
 interface Session {
   id: string;
@@ -23,6 +23,7 @@ interface Session {
   instructor: string | null;
   category: { name: string } | null;
   theme: { name: string; color: string | null } | null;
+  createdAt: string;
 }
 
 interface Category {
@@ -50,6 +51,13 @@ const durationOptions = [
   { value: 'long', label: 'Long', sublabel: '45+ min', color: 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400' },
 ];
 
+const sortOptions = [
+  { value: 'newest', label: 'Newest First', icon: ArrowDown },
+  { value: 'oldest', label: 'Oldest First', icon: ArrowUp },
+  { value: 'duration-asc', label: 'Shortest First', icon: Clock },
+  { value: 'duration-desc', label: 'Longest First', icon: Clock },
+];
+
 export default function SessionsPage() {
   const [sessions, setSessions] = useState<Session[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
@@ -61,6 +69,7 @@ export default function SessionsPage() {
   const [selectedTheme, setSelectedTheme] = useState<string | null>(null);
   const [selectedDifficulty, setSelectedDifficulty] = useState<string | null>(null);
   const [selectedDuration, setSelectedDuration] = useState<string | null>(null);
+  const [sortBy, setSortBy] = useState<string>('newest');
   const [authModalOpen, setAuthModalOpen] = useState(false);
 
   // Fetch data from Supabase
@@ -113,12 +122,13 @@ export default function SessionsPage() {
     setSelectedTheme(null);
     setSelectedDifficulty(null);
     setSelectedDuration(null);
+    setSortBy('newest');
   };
 
   const hasActiveFilters = searchQuery || selectedCategory || selectedTheme || selectedDifficulty || selectedDuration;
 
-  // Client-side filter for search and duration
-  const filteredSessions = useMemo(() => {
+  // Client-side filter for search and duration, then sort
+  const filteredAndSortedSessions = useMemo(() => {
     let result = sessions;
     
     // Filter by search query
@@ -150,8 +160,24 @@ export default function SessionsPage() {
       });
     }
     
+    // Sort
+    result = [...result].sort((a, b) => {
+      switch (sortBy) {
+        case 'newest':
+          return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+        case 'oldest':
+          return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+        case 'duration-asc':
+          return a.duration - b.duration;
+        case 'duration-desc':
+          return b.duration - a.duration;
+        default:
+          return 0;
+      }
+    });
+    
     return result;
-  }, [sessions, searchQuery, selectedDuration]);
+  }, [sessions, searchQuery, selectedDuration, sortBy]);
 
   return (
     <div className="min-h-screen flex flex-col bg-background">
@@ -172,7 +198,7 @@ export default function SessionsPage() {
             <div className="flex items-center gap-3 mb-2">
               <Badge variant="secondary" className="px-3 py-1 rounded-full gap-1.5">
                 <Video className="w-3.5 h-3.5" />
-                {filteredSessions.length} Classes
+                {filteredAndSortedSessions.length} Classes
               </Badge>
             </div>
             <h1 className="text-3xl md:text-4xl font-bold mb-3">Class Library</h1>
@@ -186,24 +212,52 @@ export default function SessionsPage() {
         <section className="py-6 border-b border-border bg-card">
           <div className="container mx-auto px-4">
             <div className="flex flex-col gap-4">
-              {/* Search */}
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                <Input
-                  type="text"
-                  placeholder="Search by title, instructor, or description..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="pl-10 pr-10 rounded-xl"
-                />
-                {searchQuery && (
-                  <button
-                    onClick={() => setSearchQuery('')}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                  >
-                    <X className="w-4 h-4" />
-                  </button>
-                )}
+              {/* Search and Sort Row */}
+              <div className="flex flex-col sm:flex-row gap-3">
+                {/* Search */}
+                <div className="relative flex-1">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                  <Input
+                    type="text"
+                    placeholder="Search by title, instructor, or description..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="pl-10 pr-10 rounded-xl"
+                  />
+                  {searchQuery && (
+                    <button
+                      onClick={() => setSearchQuery('')}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  )}
+                </div>
+                
+                {/* Sort */}
+                <div className="flex items-center gap-2">
+                  <span className="text-sm text-muted-foreground hidden sm:inline">Sort:</span>
+                  <div className="flex flex-wrap gap-1.5">
+                    {sortOptions.map((option) => {
+                      const Icon = option.icon;
+                      return (
+                        <button
+                          key={option.value}
+                          onClick={() => setSortBy(option.value)}
+                          className={`px-3 py-2 rounded-lg text-sm font-medium transition-all flex items-center gap-1.5 ${
+                            sortBy === option.value
+                              ? 'bg-primary text-primary-foreground'
+                              : 'bg-muted hover:bg-muted/80 text-muted-foreground'
+                          }`}
+                        >
+                          <Icon className="w-3.5 h-3.5" />
+                          <span className="hidden md:inline">{option.label}</span>
+                          <span className="md:hidden">{option.value.includes('duration') ? 'Time' : 'Date'}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
               </div>
               
               {/* Category Filter */}
@@ -297,7 +351,7 @@ export default function SessionsPage() {
               <div className="flex items-center justify-center py-16">
                 <Loader2 className="w-8 h-8 animate-spin text-primary" />
               </div>
-            ) : filteredSessions.length === 0 ? (
+            ) : filteredAndSortedSessions.length === 0 ? (
               <div className="text-center py-16">
                 <div className="w-16 h-16 rounded-full bg-muted flex items-center justify-center mx-auto mb-4">
                   <Search className="w-8 h-8 text-muted-foreground" />
@@ -312,7 +366,7 @@ export default function SessionsPage() {
               </div>
             ) : (
               <div className="grid sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-                {filteredSessions.map((session) => (
+                {filteredAndSortedSessions.map((session) => (
                   <SessionCard 
                     key={session.id} 
                     session={session as {
