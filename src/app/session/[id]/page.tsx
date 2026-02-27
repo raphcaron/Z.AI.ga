@@ -724,8 +724,8 @@ export default function SessionPage() {
                     href={`/session/${related.slug || related.id}`}
                     className="block"
                   >
-                    <Card className="rounded-xl overflow-hidden hover:shadow-md transition-shadow">
-                      <div className="flex gap-3 p-2">
+                    <Card className="rounded-xl overflow-hidden hover:shadow-md transition-shadow py-0">
+                      <div className="flex gap-3 p-3">
                         <div className="relative w-20 h-20 rounded-lg overflow-hidden flex-shrink-0 bg-gradient-to-br from-primary/10 to-secondary/20">
                           {related.thumbnail ? (
                             <img 
@@ -739,7 +739,7 @@ export default function SessionPage() {
                             </div>
                           )}
                         </div>
-                        <div className="flex-1 min-w-0 py-0.5">
+                        <div className="flex-1 min-w-0">
                           <h3 className="font-medium text-sm line-clamp-2">{related.title}</h3>
                           <div className="flex items-center gap-2 mt-1">
                             <Badge 
