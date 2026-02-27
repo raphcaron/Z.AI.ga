@@ -176,3 +176,29 @@ html {
 .animate-fade-in {
   animation: fade-in 0.2s ease-out;
 }
+
+/* Calendar session dots - targets the td element that has the modifier class */
+.calendar-session-dot button::after {
+  content: '';
+  display: block;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background-color: oklch(0.55 0.15 30);
+  margin: 2px auto 0;
+}
+
+.dark .calendar-session-dot button::after {
+  background-color: oklch(0.65 0.15 30);
+}
+
+/* Lighter dot when day is selected */
+.calendar-session-dot button[data-selected-single]::after,
+.calendar-session-dot button[data-selected]::after {
+  background-color: oklch(0.85 0.05 80);
+}
+
+.dark .calendar-session-dot button[data-selected-single]::after,
+.dark .calendar-session-dot button[data-selected]::after {
+  background-color: oklch(0.3 0.01 50);
+}

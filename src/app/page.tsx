@@ -25,41 +25,23 @@ interface Session {
   theme: { name: string; color: string | null } | null;
 }
 
-// Mock live sessions (for demo)
-const mockLiveSessions = [
-  {
-    id: 'live_1',
-    title: 'Morning Vinyasa Flow',
-    instructor: 'Sarah Johnson',
-    scheduledAt: new Date(Date.now() + 2 * 60 * 60 * 1000).toISOString(),
-    thumbnail: null,
-    isLive: true,
-    viewerCount: 127,
-  },
-  {
-    id: 'live_2',
-    title: 'Sunset Yin Practice',
-    instructor: 'Emma Chen',
-    scheduledAt: new Date(Date.now() + 6 * 60 * 60 * 1000).toISOString(),
-    thumbnail: null,
-    isLive: false,
-  },
-  {
-    id: 'live_3',
-    title: 'Power Yoga Challenge',
-    instructor: 'Michael Torres',
-    scheduledAt: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
-    thumbnail: null,
-    isLive: false,
-  },
-];
+interface LiveSession {
+  id: string;
+  title: string;
+  instructor: string | null;
+  liveAt: string;
+  thumbnail: string | null;
+  isLive: boolean;
+  duration: number;
+}
 
 export default function Home() {
   const [sessions, setSessions] = useState<Session[]>([]);
+  const [liveSessions, setLiveSessions] = useState<LiveSession[]>([]);
   const [loading, setLoading] = useState(true);
   const [authModalOpen, setAuthModalOpen] = useState(false);
 
-  // Fetch recent sessions from Supabase
+  // Fetch sessions from Supabase
   useEffect(() => {
     async function fetchData() {
       try {
@@ -70,6 +52,17 @@ export default function Home() {
         if (sessionsRes.ok) {
           const data = await sessionsRes.json();
           setSessions(data.sessions || []);
+        }
+
+        // Fetch live/upcoming sessions
+        const liveRes = await fetch('/api/sessions/live');
+        if (liveRes.ok) {
+          const data = await liveRes.json();
+          // Get only upcoming sessions (next 3)
+          const upcoming = (data.sessions || [])
+            .filter((s: LiveSession) => new Date(s.liveAt) >= new Date())
+            .slice(0, 3);
+          setLiveSessions(upcoming);
         }
       } catch (error) {
         console.error('Error fetching data:', error);
@@ -102,17 +95,38 @@ export default function Home() {
                   Join our instructors for real-time yoga sessions
                 </p>
               </div>
-              <Button variant="outline" className="gap-2 rounded-full">
-                <Calendar className="w-4 h-4" />
-                View Schedule
-              </Button>
+              <Link href="/calendar">
+                <Button variant="outline" className="gap-2 rounded-full cursor-pointer">
+                  <Calendar className="w-4 h-4" />
+                  View Schedule
+                </Button>
+              </Link>
             </div>
             
-            <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
-              {mockLiveSessions.map((session) => (
-                <LiveSessionCard key={session.id} session={session} />
-              ))}
-            </div>
+            {liveSessions.length === 0 ? (
+              <div className="text-center py-12 bg-muted/30 rounded-2xl">
+                <Calendar className="w-12 h-12 text-muted-foreground/30 mx-auto mb-3" />
+                <p className="text-muted-foreground">No upcoming live sessions</p>
+                <p className="text-sm text-muted-foreground mt-1">Check back soon for new sessions!</p>
+              </div>
+            ) : (
+              <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
+                {liveSessions.map((session) => (
+                  <LiveSessionCard 
+                    key={session.id} 
+                    session={{
+                      id: session.id,
+                      title: session.title,
+                      instructor: session.instructor || 'Instructor',
+                      scheduledAt: session.liveAt,
+                      thumbnail: session.thumbnail,
+                      isLive: session.isLive,
+                      viewerCount: session.isLive ? Math.floor(Math.random() * 200) + 50 : undefined,
+                    }} 
+                  />
+                ))}
+              </div>
+            )}
           </div>
         </section>
 
@@ -131,7 +145,7 @@ export default function Home() {
                 </p>
               </div>
               <Link href="/sessions">
-                <Button variant="outline" className="gap-2 rounded-full">
+                <Button variant="outline" className="gap-2 rounded-full cursor-pointer">
                   View All Classes
                   <ArrowRight className="w-4 h-4" />
                 </Button>

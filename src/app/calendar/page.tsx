@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { Navigation } from '@/components/yoga/navigation';
 import { Footer } from '@/components/yoga/footer';
 import { Calendar } from '@/components/ui/calendar';
@@ -21,6 +21,7 @@ import {
 } from 'lucide-react';
 import { format, isSameDay, parseISO, startOfDay, isAfter } from 'date-fns';
 import Link from 'next/link';
+import { cn } from '@/lib/utils';
 
 interface ScheduledSession {
   id: string;
@@ -87,27 +88,6 @@ export default function CalendarPage() {
     setDialogOpen(true);
   };
 
-  // Custom day render to show dots for sessions
-  const DayContent = (date: Date) => {
-    const hasSession = sessionDates.some((d) => isSameDay(d, date));
-    const sessionsOnDay = sessions.filter((s) => isSameDay(parseISO(s.liveAt), date));
-    const hasLive = sessionsOnDay.some((s) => s.isLive);
-
-    return (
-      <div className="relative w-full h-full flex flex-col items-center justify-center">
-        <span>{format(date, 'd')}</span>
-        {hasSession && (
-          <div className="flex gap-0.5 mt-0.5">
-            {hasLive && (
-              <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" />
-            )}
-            <span className={`w-1.5 h-1.5 rounded-full ${hasLive ? 'bg-primary' : 'bg-primary'}`} />
-          </div>
-        )}
-      </div>
-    );
-  };
-
   return (
     <div className="min-h-screen flex flex-col bg-background">
       <Navigation />
@@ -141,25 +121,16 @@ export default function CalendarPage() {
                       mode="single"
                       selected={selectedDate}
                       onSelect={setSelectedDate}
-                      className="rounded-xl border p-4"
-                      components={{
-                        DayContent: ({ date }) => DayContent(date),
+                      modifiers={{
+                        hasSession: sessionDates,
                       }}
+                      modifiersClassNames={{
+                        hasSession: 'calendar-session-dot',
+                      }}
+                      className="rounded-xl border p-4"
                     />
                   </CardContent>
                 </Card>
-
-                {/* Legend */}
-                <div className="mt-4 flex flex-wrap gap-4 justify-center">
-                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                    <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
-                    Live Now
-                  </div>
-                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                    <span className="w-2 h-2 rounded-full bg-primary" />
-                    Scheduled
-                  </div>
-                </div>
               </div>
 
               {/* Sessions for selected date */}
