@@ -28,6 +28,7 @@ import {
   DialogDescription,
   DialogFooter,
 } from '@/components/ui/dialog';
+import { Switch } from '@/components/ui/switch';
 import { useAuth } from '@/hooks/use-auth';
 import { supabase } from '@/lib/supabase';
 import {
@@ -54,6 +55,7 @@ import {
   Palette,
   Users,
   Eye,
+  Globe,
 } from 'lucide-react';
 import { format } from 'date-fns';
 
@@ -1962,15 +1964,25 @@ export default function AdminPage() {
             </div>
 
             {/* Published */}
-            <div className="flex items-center gap-2">
-              <input
-                type="checkbox"
+            <div className="flex items-center justify-between p-4 rounded-xl bg-muted/50">
+              <div className="flex items-center gap-3">
+                <div className={`p-2 rounded-lg ${formData.isPublished ? 'bg-primary/20 text-primary' : 'bg-muted text-muted-foreground'}`}>
+                  <Globe className="w-5 h-5" />
+                </div>
+                <div>
+                  <Label htmlFor="isPublished" className="font-medium cursor-pointer">
+                    {formData.isPublished ? 'Published' : 'Draft'}
+                  </Label>
+                  <p className="text-xs text-muted-foreground">
+                    {formData.isPublished ? 'Visible to everyone' : 'Only visible to admins'}
+                  </p>
+                </div>
+              </div>
+              <Switch
                 id="isPublished"
                 checked={formData.isPublished}
-                onChange={(e) => setFormData({ ...formData, isPublished: e.target.checked })}
-                className="rounded"
+                onCheckedChange={(checked) => setFormData({ ...formData, isPublished: checked })}
               />
-              <Label htmlFor="isPublished">Published</Label>
             </div>
           </div>
 
