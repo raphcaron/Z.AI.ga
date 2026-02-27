@@ -113,6 +113,7 @@ export default function SessionPage() {
   const [relatedSessions, setRelatedSessions] = useState<RelatedSession[]>([]);
   const [loading, setLoading] = useState(true);
   const [authModalOpen, setAuthModalOpen] = useState(false);
+  const [isAdmin, setIsAdmin] = useState(false);
   
   // Video player state
   const [isPlaying, setIsPlaying] = useState(false);
@@ -143,8 +144,43 @@ export default function SessionPage() {
   const sessionId = params.id as string;
   const isFavorited = session ? isFavorite(session.id) : false;
   
-  // Check if user is admin (strict check - must have is_admin: true in user_metadata)
-  const isAdmin = user?.user_metadata?.is_admin === true;
+  // Check admin status from database when user changes
+  useEffect(() => {
+    const checkAdmin = async () => {
+      if (!user) {
+        setIsAdmin(false);
+        return;
+      }
+      
+      // First check JWT metadata (fast)
+      if (user.user_metadata?.is_admin === true) {
+        setIsAdmin(true);
+        return;
+      }
+      
+      // Fallback: check via API (for users who were made admin after logging in)
+      try {
+        const sessionResult = await supabase.auth.getSession();
+        const token = sessionResult.data.session?.access_token;
+        
+        if (token) {
+          const response = await fetch('/api/users/check-admin', {
+            headers: { 'Authorization': `Bearer ${token}` },
+          });
+          
+          if (response.ok) {
+            const data = await response.json();
+            setIsAdmin(data.isAdmin === true);
+          }
+        }
+      } catch (error) {
+        console.error('Error checking admin status:', error);
+        setIsAdmin(false);
+      }
+    };
+    
+    checkAdmin();
+  }, [user]);
 
   useEffect(() => {
     if (sessionId) {
@@ -251,13 +287,13 @@ export default function SessionPage() {
 
       setSession(data);
 
-      // Load related sessions
+      // Load related sessions - use the actual session ID from data, not the URL param
       if (data) {
         const { data: related } = await supabase
           .from('sessions')
           .select('id, title, slug, thumbnail, duration, difficulty, instructor')
           .eq('is_published', true)
-          .neq('id', sessionId)
+          .neq('id', data.id)
           .limit(4);
 
         setRelatedSessions(related || []);
