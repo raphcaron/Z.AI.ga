@@ -64,7 +64,7 @@ export function SessionCard({ session, onAuthRequired }: SessionCardProps) {
   };
 
   return (
-    <Link href={`/session/${session.id}`}>
+    <Link href={`/session/${session.slug || session.id}`}>
       <Card className="group overflow-hidden border border-border/50 hover:border-primary/30 shadow-sm hover:shadow-md transition-all duration-300 rounded-2xl bg-card cursor-pointer p-0">
         <div className="relative aspect-video overflow-hidden rounded-t-2xl">
           {/* Thumbnail */}

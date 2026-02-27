@@ -81,6 +81,7 @@ interface Session {
 interface RelatedSession {
   id: string;
   title: string;
+  slug: string;
   thumbnail: string | null;
   duration: number;
   difficulty: string;
@@ -208,7 +209,8 @@ export default function SessionPage() {
   const loadSession = async () => {
     setLoading(true);
     try {
-      const { data, error } = await supabase
+      // Try to find by ID first, then by slug
+      let query = supabase
         .from('sessions')
         .select(`
           id,
@@ -228,9 +230,18 @@ export default function SessionPage() {
           created_at,
           category:categories ( name ),
           theme:themes ( name, color )
-        `)
-        .eq('id', sessionId)
-        .single();
+        `);
+      
+      // Check if sessionId looks like a UUID (ID) or a slug
+      const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(sessionId);
+      
+      if (isUUID) {
+        query = query.eq('id', sessionId);
+      } else {
+        query = query.eq('slug', sessionId);
+      }
+      
+      const { data, error } = await query.single();
 
       if (error) {
         console.error('Error loading session:', error);
@@ -244,7 +255,7 @@ export default function SessionPage() {
       if (data) {
         const { data: related } = await supabase
           .from('sessions')
-          .select('id, title, thumbnail, duration, difficulty, instructor')
+          .select('id, title, slug, thumbnail, duration, difficulty, instructor')
           .eq('is_published', true)
           .neq('id', sessionId)
           .limit(4);
@@ -674,7 +685,7 @@ export default function SessionPage() {
                 {relatedSessions.map((related) => (
                   <Link 
                     key={related.id} 
-                    href={`/session/${related.id}`}
+                    href={`/session/${related.slug || related.id}`}
                     className="block"
                   >
                     <Card className="rounded-xl overflow-hidden hover:shadow-md transition-shadow">

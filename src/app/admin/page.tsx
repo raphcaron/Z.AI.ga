@@ -1081,7 +1081,7 @@ export default function AdminPage() {
                                   asChild
                                   className="rounded-lg"
                                 >
-                                  <a href={`/session/${session.id}`} target="_blank" rel="noopener noreferrer">
+                                  <a href={`/session/${session.slug || session.id}`} target="_blank" rel="noopener noreferrer">
                                     <Eye className="w-4 h-4" />
                                   </a>
                                 </Button>
@@ -1227,7 +1227,7 @@ export default function AdminPage() {
                                     asChild
                                     className="rounded-lg"
                                   >
-                                    <a href={`/session/${session.id}`} target="_blank" rel="noopener noreferrer">
+                                    <a href={`/session/${session.slug || session.id}`} target="_blank" rel="noopener noreferrer">
                                       <Eye className="w-4 h-4" />
                                     </a>
                                   </Button>
@@ -1338,7 +1338,7 @@ export default function AdminPage() {
                                     asChild
                                     className="rounded-lg"
                                   >
-                                    <a href={`/session/${session.id}`} target="_blank" rel="noopener noreferrer">
+                                    <a href={`/session/${session.slug || session.id}`} target="_blank" rel="noopener noreferrer">
                                       <Eye className="w-4 h-4" />
                                     </a>
                                   </Button>
