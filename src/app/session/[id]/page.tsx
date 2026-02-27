@@ -141,6 +141,9 @@ export default function SessionPage() {
   
   const sessionId = params.id as string;
   const isFavorited = session ? isFavorite(session.id) : false;
+  
+  // Check if user is admin (strict check - must have is_admin: true in user_metadata)
+  const isAdmin = user?.user_metadata?.is_admin === true;
 
   useEffect(() => {
     if (sessionId) {
@@ -578,7 +581,7 @@ export default function SessionPage() {
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
-                  {user && (
+                  {isAdmin && (
                     <Button
                       variant="outline"
                       size="icon"

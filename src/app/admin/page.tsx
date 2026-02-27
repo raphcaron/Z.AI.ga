@@ -148,8 +148,8 @@ export default function AdminPage() {
   const [categoryForm, setCategoryForm] = useState({ name: '', slug: '', description: '' });
   const [themeForm, setThemeForm] = useState({ name: '', slug: '', description: '', color: '#6366F1' });
 
-  // Check if user is admin (for demo, check user_metadata or allow all logged-in users)
-  const isAdmin = user?.user_metadata?.is_admin || true; // For demo, all logged-in users are admins
+  // Check if user is admin (strict check - must have is_admin: true in user_metadata)
+  const isAdmin = user?.user_metadata?.is_admin === true;
 
   useEffect(() => {
     if (!authLoading && !user) {
