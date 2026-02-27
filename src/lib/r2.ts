@@ -1,4 +1,4 @@
-import { S3Client, PutObjectCommand, GetObjectCommand, DeleteObjectCommand } from '@aws-sdk/client-s3';
+import { S3Client, PutObjectCommand, GetObjectCommand, DeleteObjectCommand, ListObjectsV2Command } from '@aws-sdk/client-s3';
 
 // R2 Client - lazy initialization to avoid build-time errors
 let r2Client: S3Client | null = null;
@@ -35,7 +35,10 @@ export async function uploadToR2(
   contentType: string
 ): Promise<{ key: string; url: string }> {
   const client = getR2Client();
-  
+
+  console.log('R2 upload - bucket:', bucket, 'key:', key);
+  console.log('R2 URLs - VIDEOS_URL:', VIDEOS_URL, 'THUMBNAILS_URL:', THUMBNAILS_URL);
+
   await client.send(
     new PutObjectCommand({
       Bucket: bucket,
@@ -48,6 +51,8 @@ export async function uploadToR2(
   // Determine the public URL based on bucket
   const baseUrl = bucket === VIDEOS_BUCKET ? VIDEOS_URL : THUMBNAILS_URL;
   const url = `${baseUrl}/${key}`;
+
+  console.log('R2 constructed URL:', url);
 
   return { key, url };
 }
@@ -64,6 +69,39 @@ export async function deleteFromR2(bucket: string, key: string): Promise<void> {
       Key: key,
     })
   );
+}
+
+/**
+ * Delete all files in a folder (prefix) from R2
+ */
+export async function deleteFolderFromR2(bucket: string, prefix: string): Promise<number> {
+  const client = getR2Client();
+  let deletedCount = 0;
+  
+  // List all objects with the prefix
+  const listCommand = new ListObjectsV2Command({
+    Bucket: bucket,
+    Prefix: prefix,
+  });
+  
+  const response = await client.send(listCommand);
+  
+  if (response.Contents && response.Contents.length > 0) {
+    // Delete each object
+    for (const object of response.Contents) {
+      if (object.Key) {
+        await client.send(
+          new DeleteObjectCommand({
+            Bucket: bucket,
+            Key: object.Key,
+          })
+        );
+        deletedCount++;
+      }
+    }
+  }
+  
+  return deletedCount;
 }
 
 /**

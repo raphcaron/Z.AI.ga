@@ -148,7 +148,8 @@ export default function AdminPage() {
   // Upload state
   const [uploadingThumbnail, setUploadingThumbnail] = useState(false);
   const [uploadingVideo, setUploadingVideo] = useState(false);
-  const [uploadProgress, setUploadProgress] = useState(0);
+  const [thumbnailProgress, setThumbnailProgress] = useState(0);
+  const [videoProgress, setVideoProgress] = useState(0);
   const [seeding, setSeeding] = useState(false);
   
   // Category/Theme editing state
@@ -159,6 +160,11 @@ export default function AdminPage() {
   const [categoryForm, setCategoryForm] = useState({ name: '', slug: '', description: '' });
   const [themeForm, setThemeForm] = useState({ name: '', slug: '', description: '', color: '#6366F1' });
   const [claimingAdmin, setClaimingAdmin] = useState(false);
+
+  // Duplicate slug warning state
+  const [duplicateSlugDialogOpen, setDuplicateSlugDialogOpen] = useState(false);
+  const [pendingSessionData, setPendingSessionData] = useState<any>(null);
+  const [duplicateSession, setDuplicateSession] = useState<Session | null>(null);
 
   // Check if user is admin (strict check - must have is_admin: true in user_metadata)
   const isAdmin = user?.user_metadata?.is_admin === true;
@@ -472,7 +478,7 @@ export default function AdminPage() {
   };
 
   // Helper function with timeout
-  const withTimeout = <T,>(promise: Promise<T>, timeoutMs: number = 15000): Promise<T> => {
+  const withTimeout = <T,>(promise: Promise<T>, timeoutMs: number = 30000): Promise<T> => {
     return new Promise((resolve, reject) => {
       const timer = setTimeout(() => reject(new Error('Request timed out. Please try again.')), timeoutMs);
       promise
@@ -483,11 +489,51 @@ export default function AdminPage() {
   };
 
   const handleSave = async () => {
+    // Prevent saving while uploads are in progress
+    if (uploadingThumbnail || uploadingVideo) {
+      setMessage({ type: 'error', text: 'Please wait for uploads to complete' });
+      return;
+    }
+
     if (!formData.title) {
       setMessage({ type: 'error', text: 'Title is required' });
       return;
     }
 
+    const slug = formData.title
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-|-$/g, '');
+
+    // Check for duplicate slug (only for new sessions)
+    if (!editingSession) {
+      const existingSession = sessions.find(s => s.slug === slug);
+      if (existingSession) {
+        setDuplicateSession(existingSession);
+        setPendingSessionData({
+          title: formData.title,
+          slug: slug,
+          description: formData.description || null,
+          thumbnail: formData.thumbnail || null,
+          video_url: formData.videoUrl || null,
+          duration: formData.duration,
+          difficulty: formData.difficulty,
+          instructor: formData.instructor || null,
+          is_live: isLiveSession,
+          live_at: isLiveSession && formData.liveAt ? new Date(formData.liveAt).toISOString() : null,
+          is_published: formData.isPublished,
+          category_id: formData.categoryId || null,
+          theme_id: formData.themeId || null,
+        });
+        setDuplicateSlugDialogOpen(true);
+        return;
+      }
+    }
+
+    await performSave();
+  };
+
+  const performSave = async (sessionDataOverride?: any) => {
     setSaving(true);
     setMessage(null);
 
@@ -497,9 +543,9 @@ export default function AdminPage() {
         .replace(/[^a-z0-9]+/g, '-')
         .replace(/^-|-$/g, '');
 
-      const sessionData = {
+      const sessionData = sessionDataOverride || {
         title: formData.title,
-        slug: editingSession ? editingSession.slug : `${slug}-${Date.now()}`,
+        slug: editingSession ? editingSession.slug : slug,
         description: formData.description || null,
         thumbnail: formData.thumbnail || null,
         video_url: formData.videoUrl || null,
@@ -514,6 +560,8 @@ export default function AdminPage() {
       };
 
       console.log('Saving session:', sessionData);
+      console.log('Current formData.videoUrl:', formData.videoUrl);
+      console.log('Current formData.thumbnail:', formData.thumbnail);
 
       if (editingSession) {
         // Update existing session
@@ -545,7 +593,9 @@ export default function AdminPage() {
       }
 
       setDialogOpen(false);
-      resetForm();
+      setDuplicateSlugDialogOpen(false);
+      setPendingSessionData(null);
+      setDuplicateSession(null);
       fetchData();
     } catch (error: any) {
       console.error('Error saving session:', error);
@@ -556,11 +606,28 @@ export default function AdminPage() {
   };
 
   const handleDelete = async (session: Session) => {
-    if (!confirm(`Are you sure you want to delete "${session.title}"?`)) {
+    if (!confirm(`Are you sure you want to delete "${session.title}"? This will also delete all associated files from storage.`)) {
       return;
     }
 
     try {
+      // Delete files from R2 first (if slug exists)
+      if (session.slug) {
+        try {
+          await fetch('/api/upload/delete', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ slug: session.slug }),
+          });
+        } catch (r2Error) {
+          console.warn('Failed to delete R2 files:', r2Error);
+          // Continue with database deletion even if R2 deletion fails
+        }
+      }
+
+      // Delete from database
       const { error } = await supabase
         .from('sessions')
         .delete()
@@ -594,33 +661,83 @@ export default function AdminPage() {
     const file = e.target.files?.[0];
     if (!file) return;
     
-    // Use the session ID if editing, otherwise generate a temp ID
-    const sessionId = editingSession?.id || `temp-${Date.now()}`;
+    // Use existing slug or generate from title
+    const slug = editingSession?.slug || generateSlug(formData.title) || 'untitled';
     
     setUploadingThumbnail(true);
+    setThumbnailProgress(0);
+    
     try {
       const formDataUpload = new FormData();
       formDataUpload.append('file', file);
-      formDataUpload.append('sessionId', sessionId);
+      formDataUpload.append('slug', slug);
       
-      const response = await fetch('/api/upload/thumbnail', {
-        method: 'POST',
-        body: formDataUpload,
+      // Use XMLHttpRequest for upload progress tracking
+      const result = await new Promise<{ success: boolean; url?: string; error?: string }>((resolve, reject) => {
+        const xhr = new XMLHttpRequest();
+        
+        // Track upload progress
+        xhr.upload.addEventListener('progress', (event) => {
+          if (event.lengthComputable) {
+            const percentComplete = Math.round((event.loaded / event.total) * 100);
+            setThumbnailProgress(percentComplete);
+          }
+        });
+        
+        xhr.addEventListener('load', () => {
+          console.log('Thumbnail XHR load event - status:', xhr.status);
+          console.log('Thumbnail XHR response text:', xhr.responseText);
+          if (xhr.status >= 200 && xhr.status < 300) {
+            try {
+              const response = JSON.parse(xhr.responseText);
+              console.log('Thumbnail XHR parsed response:', JSON.stringify(response));
+              resolve(response);
+            } catch (parseError) {
+              console.error('Thumbnail JSON parse error:', parseError, 'Response text:', xhr.responseText);
+              reject(new Error('Invalid response from server'));
+            }
+          } else {
+            try {
+              const response = JSON.parse(xhr.responseText);
+              reject(new Error(response.error || 'Upload failed'));
+            } catch {
+              reject(new Error(`Upload failed with status ${xhr.status}`));
+            }
+          }
+        });
+        
+        xhr.addEventListener('error', () => {
+          console.error('Thumbnail XHR network error');
+          reject(new Error('Network error during upload'));
+        });
+        
+        xhr.addEventListener('abort', () => {
+          reject(new Error('Upload cancelled'));
+        });
+        
+        xhr.open('POST', '/api/upload/thumbnail');
+        xhr.send(formDataUpload);
       });
       
-      const data = await response.json();
-      
-      if (data.success) {
-        setFormData({ ...formData, thumbnail: data.url });
-        setMessage({ type: 'success', text: 'Thumbnail uploaded!' });
+      console.log('Thumbnail upload result:', JSON.stringify(result));
+
+      if (result.success && result.url) {
+        console.log('Setting thumbnail to:', result.url);
+        setFormData(prev => {
+          const updated = { ...prev, thumbnail: result.url };
+          console.log('Updated formData.thumbnail:', updated.thumbnail);
+          return updated;
+        });
       } else {
-        throw new Error(data.error);
+        console.error('Upload result missing URL:', result);
+        throw new Error(result.error || 'Upload returned no URL');
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error uploading thumbnail:', error);
-      setMessage({ type: 'error', text: 'Failed to upload thumbnail' });
+      setMessage({ type: 'error', text: `Thumbnail: ${error?.message || 'Failed to upload'}` });
     } finally {
       setUploadingThumbnail(false);
+      setThumbnailProgress(0);
     }
   };
   
@@ -629,36 +746,83 @@ export default function AdminPage() {
     const file = e.target.files?.[0];
     if (!file) return;
     
-    // Use the session ID if editing, otherwise generate a temp ID
-    const sessionId = editingSession?.id || `temp-${Date.now()}`;
+    // Use existing slug or generate from title
+    const slug = editingSession?.slug || generateSlug(formData.title) || 'untitled';
     
     setUploadingVideo(true);
-    setUploadProgress(0);
+    setVideoProgress(0);
     
     try {
       const formDataUpload = new FormData();
       formDataUpload.append('file', file);
-      formDataUpload.append('sessionId', sessionId);
+      formDataUpload.append('slug', slug);
       
-      const response = await fetch('/api/upload/video', {
-        method: 'POST',
-        body: formDataUpload,
+      // Use XMLHttpRequest for upload progress tracking
+      const result = await new Promise<{ success: boolean; url?: string; error?: string }>((resolve, reject) => {
+        const xhr = new XMLHttpRequest();
+        
+        // Track upload progress
+        xhr.upload.addEventListener('progress', (event) => {
+          if (event.lengthComputable) {
+            const percentComplete = Math.round((event.loaded / event.total) * 100);
+            setVideoProgress(percentComplete);
+          }
+        });
+        
+        xhr.addEventListener('load', () => {
+          console.log('Video XHR load event - status:', xhr.status);
+          console.log('Video XHR response text:', xhr.responseText);
+          if (xhr.status >= 200 && xhr.status < 300) {
+            try {
+              const response = JSON.parse(xhr.responseText);
+              console.log('Video XHR parsed response:', JSON.stringify(response));
+              resolve(response);
+            } catch (parseError) {
+              console.error('Video JSON parse error:', parseError, 'Response text:', xhr.responseText);
+              reject(new Error('Invalid response from server'));
+            }
+          } else {
+            try {
+              const response = JSON.parse(xhr.responseText);
+              reject(new Error(response.error || 'Upload failed'));
+            } catch {
+              reject(new Error(`Upload failed with status ${xhr.status}`));
+            }
+          }
+        });
+        
+        xhr.addEventListener('error', () => {
+          console.error('Video XHR network error');
+          reject(new Error('Network error during upload'));
+        });
+        
+        xhr.addEventListener('abort', () => {
+          reject(new Error('Upload cancelled'));
+        });
+        
+        xhr.open('POST', '/api/upload/video');
+        xhr.send(formDataUpload);
       });
       
-      const data = await response.json();
-      
-      if (data.success) {
-        setFormData({ ...formData, videoUrl: data.url });
-        setMessage({ type: 'success', text: 'Video uploaded!' });
+      console.log('Video upload result:', JSON.stringify(result));
+
+      if (result.success && result.url) {
+        console.log('Setting videoUrl to:', result.url);
+        setFormData(prev => {
+          const updated = { ...prev, videoUrl: result.url };
+          console.log('Updated formData.videoUrl:', updated.videoUrl);
+          return updated;
+        });
       } else {
-        throw new Error(data.error);
+        console.error('Upload result missing URL:', result);
+        throw new Error(result.error || 'Upload returned no URL');
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error uploading video:', error);
-      setMessage({ type: 'error', text: 'Failed to upload video' });
+      setMessage({ type: 'error', text: `Video: ${error?.message || 'Failed to upload'}` });
     } finally {
       setUploadingVideo(false);
-      setUploadProgress(0);
+      setVideoProgress(0);
     }
   };
 
@@ -945,7 +1109,7 @@ export default function AdminPage() {
         {/* Content */}
         <section className="py-12">
           <div className="container mx-auto px-4">
-            {message && (
+            {message && !dialogOpen && !duplicateSlugDialogOpen && (
               <div className={`flex items-center gap-2 p-4 rounded-xl mb-6 ${
                 message.type === 'success' 
                   ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' 
@@ -1442,7 +1606,13 @@ export default function AdminPage() {
       <Footer />
 
       {/* Edit/Create Dialog */}
-      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+      <Dialog open={dialogOpen} onOpenChange={(open) => {
+        setDialogOpen(open);
+        if (!open) {
+          setMessage(null);
+          resetForm();
+        }
+      }}>
         <DialogContent className="sm:max-w-2xl rounded-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>
@@ -1452,6 +1622,26 @@ export default function AdminPage() {
               Fill in the details below to {editingSession ? 'update' : 'create'} a {isLiveSession ? 'live session' : 'video'}.
             </DialogDescription>
           </DialogHeader>
+
+          {/* In-dialog message */}
+          {message && (
+            <div className={`flex items-center gap-2 p-3 rounded-xl ${
+              message.type === 'success' 
+                ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' 
+                : 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400'
+            }`}>
+              {message.type === 'success' ? <Save className="w-4 h-4" /> : <AlertCircle className="w-4 h-4" />}
+              <span className="flex-1">{message.text}</span>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-auto p-1"
+                onClick={() => setMessage(null)}
+              >
+                <X className="w-4 h-4" />
+              </Button>
+            </div>
+          )}
 
           <div className="grid gap-6 py-4">
             {/* Title */}
@@ -1513,7 +1703,18 @@ export default function AdminPage() {
                   </Button>
                 </div>
               </div>
-              {formData.thumbnail && (
+              {uploadingThumbnail && thumbnailProgress > 0 && (
+                <div className="mt-2">
+                  <div className="h-2 bg-muted rounded-full overflow-hidden">
+                    <div 
+                      className="h-full bg-primary transition-all duration-300"
+                      style={{ width: `${thumbnailProgress}%` }}
+                    />
+                  </div>
+                  <p className="text-xs text-muted-foreground mt-1">Uploading thumbnail... {thumbnailProgress}%</p>
+                </div>
+              )}
+              {formData.thumbnail && !uploadingThumbnail && (
                 <div className="mt-2 relative w-32 h-20 rounded-lg overflow-hidden bg-muted">
                   <img src={formData.thumbnail} alt="Thumbnail preview" className="w-full h-full object-cover" />
                 </div>
@@ -1556,15 +1757,15 @@ export default function AdminPage() {
                     </Button>
                   </div>
                 </div>
-                {uploadingVideo && (
+                {uploadingVideo && videoProgress > 0 && (
                   <div className="mt-2">
                     <div className="h-2 bg-muted rounded-full overflow-hidden">
                       <div 
                         className="h-full bg-primary transition-all duration-300"
-                        style={{ width: `${uploadProgress}%` }}
+                        style={{ width: `${videoProgress}%` }}
                       />
                     </div>
-                    <p className="text-xs text-muted-foreground mt-1">Uploading... {uploadProgress}%</p>
+                    <p className="text-xs text-muted-foreground mt-1">Uploading video... {videoProgress}%</p>
                   </div>
                 )}
                 {formData.videoUrl && !uploadingVideo && (
@@ -1751,11 +1952,20 @@ export default function AdminPage() {
             <Button variant="outline" onClick={() => setDialogOpen(false)} className="rounded-xl">
               Cancel
             </Button>
-            <Button onClick={handleSave} disabled={saving} className="rounded-xl">
+            <Button
+              onClick={handleSave}
+              disabled={saving || uploadingThumbnail || uploadingVideo}
+              className="rounded-xl"
+            >
               {saving ? (
                 <>
                   <Loader2 className="w-4 h-4 mr-2 animate-spin" />
                   Saving...
+                </>
+              ) : uploadingThumbnail || uploadingVideo ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  Uploading...
                 </>
               ) : (
                 <>
@@ -1905,6 +2115,49 @@ export default function AdminPage() {
             <Button onClick={handleSaveTheme} disabled={saving} className="rounded-xl">
               {saving ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}
               {editingTheme ? 'Update' : 'Create'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Duplicate Slug Warning Dialog */}
+      <Dialog open={duplicateSlugDialogOpen} onOpenChange={setDuplicateSlugDialogOpen}>
+        <DialogContent className="sm:max-w-md rounded-2xl">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-amber-600">
+              <AlertCircle className="w-5 h-5" />
+              Duplicate Title Detected
+            </DialogTitle>
+            <DialogDescription>
+              A session with a similar title already exists.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="py-4">
+            <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-xl p-4 mb-4">
+              <p className="text-sm text-amber-800 dark:text-amber-200">
+                <strong>Existing session:</strong> "{duplicateSession?.title}"
+              </p>
+              <p className="text-xs text-amber-600 dark:text-amber-400 mt-1">
+                Both titles would generate the same URL slug, which would cause a conflict.
+              </p>
+            </div>
+            <p className="text-sm text-muted-foreground">
+              Please choose a different title to avoid URL conflicts. Each session needs a unique URL.
+            </p>
+          </div>
+
+          <DialogFooter className="flex-col sm:flex-row gap-2">
+            <Button 
+              variant="outline" 
+              onClick={() => {
+                setDuplicateSlugDialogOpen(false);
+                setPendingSessionData(null);
+                setDuplicateSession(null);
+              }} 
+              className="rounded-xl w-full sm:w-auto"
+            >
+              Go Back & Edit Title
             </Button>
           </DialogFooter>
         </DialogContent>

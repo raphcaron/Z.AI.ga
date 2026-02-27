@@ -5,14 +5,14 @@ export async function POST(request: Request) {
   try {
     const formData = await request.formData();
     const file = formData.get('file') as File | null;
-    const sessionId = formData.get('sessionId') as string | null;
+    const slug = formData.get('slug') as string | null;
 
     if (!file) {
       return NextResponse.json({ error: 'No file provided' }, { status: 400 });
     }
 
-    if (!sessionId) {
-      return NextResponse.json({ error: 'No sessionId provided' }, { status: 400 });
+    if (!slug) {
+      return NextResponse.json({ error: 'No slug provided' }, { status: 400 });
     }
 
     // Validate file type
@@ -36,14 +36,16 @@ export async function POST(request: Request) {
     // Get file extension
     const extension = file.name.split('.').pop()?.toLowerCase() || 'mp4';
     
-    // Generate key: videos/sessionId/video.mp4
-    const key = `${sessionId}/video.${extension}`;
+    // Generate key: slug/video.mp4 (SEO-friendly folder structure)
+    const key = `${slug}/video.${extension}`;
 
     // Convert to buffer
     const buffer = Buffer.from(await file.arrayBuffer());
 
     // Upload to R2
     const result = await uploadToR2(VIDEOS_BUCKET, key, buffer, file.type);
+
+    console.log('Video upload complete - key:', result.key, 'url:', result.url);
 
     return NextResponse.json({
       success: true,
