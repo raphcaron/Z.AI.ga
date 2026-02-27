@@ -9,7 +9,7 @@ import { Footer } from '@/components/yoga/footer';
 import { AuthModal } from '@/components/yoga/auth-modal';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
 import { Video, Search, X, Loader2, Filter, ArrowLeft, Clock } from 'lucide-react';
 
 interface Session {
@@ -56,6 +56,7 @@ export default function SessionsPage() {
   const [themes, setThemes] = useState<Theme[]>([]);
   const [loading, setLoading] = useState(true);
   
+  const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [selectedTheme, setSelectedTheme] = useState<string | null>(null);
   const [selectedDifficulty, setSelectedDifficulty] = useState<string | null>(null);
@@ -73,7 +74,7 @@ export default function SessionsPage() {
         if (selectedCategory) params.append('categoryId', selectedCategory);
         if (selectedTheme) params.append('themeId', selectedTheme);
         if (selectedDifficulty) params.append('difficulty', selectedDifficulty);
-        params.append('limit', '20');
+        params.append('limit', '100');
         
         // Fetch sessions with filters
         const sessionsRes = await fetch(`/api/sessions?${params.toString()}`);
@@ -107,32 +108,50 @@ export default function SessionsPage() {
   }, [selectedCategory, selectedTheme, selectedDifficulty]);
 
   const clearAllFilters = () => {
+    setSearchQuery('');
     setSelectedCategory(null);
     setSelectedTheme(null);
     setSelectedDifficulty(null);
     setSelectedDuration(null);
   };
 
-  const hasActiveFilters = selectedCategory || selectedTheme || selectedDifficulty || selectedDuration;
+  const hasActiveFilters = searchQuery || selectedCategory || selectedTheme || selectedDifficulty || selectedDuration;
 
-  // Client-side filter for duration (since API doesn't support it yet)
+  // Client-side filter for search and duration
   const filteredSessions = useMemo(() => {
-    if (!selectedDuration) return sessions;
+    let result = sessions;
     
-    return sessions.filter((session) => {
-      const duration = session.duration;
-      switch (selectedDuration) {
-        case 'short':
-          return duration < 30;
-        case 'medium':
-          return duration >= 30 && duration <= 45;
-        case 'long':
-          return duration > 45;
-        default:
-          return true;
-      }
-    });
-  }, [sessions, selectedDuration]);
+    // Filter by search query
+    if (searchQuery.trim()) {
+      const query = searchQuery.toLowerCase().trim();
+      result = result.filter((session) => 
+        session.title.toLowerCase().includes(query) ||
+        (session.description && session.description.toLowerCase().includes(query)) ||
+        (session.instructor && session.instructor.toLowerCase().includes(query)) ||
+        (session.category && session.category.name.toLowerCase().includes(query)) ||
+        (session.theme && session.theme.name.toLowerCase().includes(query))
+      );
+    }
+    
+    // Filter by duration
+    if (selectedDuration) {
+      result = result.filter((session) => {
+        const duration = session.duration;
+        switch (selectedDuration) {
+          case 'short':
+            return duration < 30;
+          case 'medium':
+            return duration >= 30 && duration <= 45;
+          case 'long':
+            return duration > 45;
+          default:
+            return true;
+        }
+      });
+    }
+    
+    return result;
+  }, [sessions, searchQuery, selectedDuration]);
 
   return (
     <div className="min-h-screen flex flex-col bg-background">
@@ -167,6 +186,26 @@ export default function SessionsPage() {
         <section className="py-6 border-b border-border bg-card">
           <div className="container mx-auto px-4">
             <div className="flex flex-col gap-4">
+              {/* Search */}
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                <Input
+                  type="text"
+                  placeholder="Search by title, instructor, or description..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="pl-10 pr-10 rounded-xl"
+                />
+                {searchQuery && (
+                  <button
+                    onClick={() => setSearchQuery('')}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                )}
+              </div>
+              
               {/* Category Filter */}
               <div className="flex flex-col gap-2">
                 <span className="text-sm font-medium text-muted-foreground">Categories</span>
@@ -265,7 +304,7 @@ export default function SessionsPage() {
                 </div>
                 <h3 className="text-lg font-semibold mb-2">No classes found</h3>
                 <p className="text-muted-foreground mb-4">
-                  Try adjusting your filters to find more classes
+                  Try adjusting your filters or search query
                 </p>
                 <Button variant="outline" onClick={clearAllFilters}>
                   Clear all filters

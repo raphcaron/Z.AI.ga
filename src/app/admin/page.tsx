@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { Navigation } from '@/components/yoga/navigation';
 import { Footer } from '@/components/yoga/footer';
@@ -44,6 +44,7 @@ import {
   X,
   Shield,
   AlertCircle,
+  Search,
 } from 'lucide-react';
 import { format } from 'date-fns';
 
@@ -89,6 +90,10 @@ export default function AdminPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  
+  // Search state
+  const [videoSearch, setVideoSearch] = useState('');
+  const [liveSearch, setLiveSearch] = useState('');
   
   // Edit/Create dialog state
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -156,8 +161,6 @@ export default function AdminPage() {
         console.error('Error fetching sessions:', sessionsError);
       }
 
-      console.log('Fetched sessions:', sessionsData?.length || 0, 'videos:', sessionsData?.filter((s: any) => !s.live_at).length || 0);
-
       // Fetch categories
       const { data: categoriesData } = await supabase
         .from('categories')
@@ -197,6 +200,32 @@ export default function AdminPage() {
       setLoading(false);
     }
   };
+
+  // Filter videos by search
+  const filteredVideos = useMemo(() => {
+    const videos = sessions.filter(s => !s.liveAt);
+    if (!videoSearch.trim()) return videos;
+    
+    const query = videoSearch.toLowerCase().trim();
+    return videos.filter((session) => 
+      session.title.toLowerCase().includes(query) ||
+      (session.description && session.description.toLowerCase().includes(query)) ||
+      (session.instructor && session.instructor.toLowerCase().includes(query))
+    );
+  }, [sessions, videoSearch]);
+
+  // Filter live sessions by search
+  const filteredLiveSessions = useMemo(() => {
+    const liveSessions = sessions.filter(s => s.liveAt);
+    if (!liveSearch.trim()) return liveSessions;
+    
+    const query = liveSearch.toLowerCase().trim();
+    return liveSessions.filter((session) => 
+      session.title.toLowerCase().includes(query) ||
+      (session.description && session.description.toLowerCase().includes(query)) ||
+      (session.instructor && session.instructor.toLowerCase().includes(query))
+    );
+  }, [sessions, liveSearch]);
 
   const resetForm = () => {
     setFormData({
@@ -403,15 +432,36 @@ export default function AdminPage() {
               {/* Videos Tab */}
               <TabsContent value="videos">
                 <Card className="rounded-3xl">
-                  <CardHeader className="flex flex-row items-center justify-between">
-                    <div>
-                      <CardTitle>Video Library</CardTitle>
-                      <CardDescription>Manage your on-demand video content</CardDescription>
+                  <CardHeader>
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                      <div>
+                        <CardTitle>Video Library</CardTitle>
+                        <CardDescription>Manage your on-demand video content</CardDescription>
+                      </div>
+                      <Button onClick={() => openCreateDialog(false)} className="gap-2 rounded-xl">
+                        <Plus className="w-4 h-4" />
+                        Add Video
+                      </Button>
                     </div>
-                    <Button onClick={() => openCreateDialog(false)} className="gap-2 rounded-xl">
-                      <Plus className="w-4 h-4" />
-                      Add Video
-                    </Button>
+                    {/* Search */}
+                    <div className="relative mt-4">
+                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                      <Input
+                        type="text"
+                        placeholder="Search videos..."
+                        value={videoSearch}
+                        onChange={(e) => setVideoSearch(e.target.value)}
+                        className="pl-10 pr-10 rounded-xl"
+                      />
+                      {videoSearch && (
+                        <button
+                          onClick={() => setVideoSearch('')}
+                          className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                        >
+                          <X className="w-4 h-4" />
+                        </button>
+                      )}
+                    </div>
                   </CardHeader>
                   <CardContent>
                     {loading ? (
@@ -421,7 +471,7 @@ export default function AdminPage() {
                     ) : (
                       <ScrollArea className="h-[600px]">
                         <div className="space-y-3 pr-4">
-                          {sessions.filter(s => !s.liveAt).map((session) => (
+                          {filteredVideos.map((session) => (
                             <div
                               key={session.id}
                               className="flex items-center gap-4 p-4 rounded-2xl bg-muted/50 hover:bg-muted transition-colors"
@@ -481,9 +531,9 @@ export default function AdminPage() {
                               </div>
                             </div>
                           ))}
-                          {sessions.filter(s => !s.liveAt).length === 0 && (
+                          {filteredVideos.length === 0 && (
                             <div className="text-center py-12 text-muted-foreground">
-                              No videos yet. Click "Add Video" to create your first video.
+                              {videoSearch ? 'No videos match your search.' : 'No videos yet. Click "Add Video" to create your first video.'}
                             </div>
                           )}
                         </div>
@@ -496,15 +546,36 @@ export default function AdminPage() {
               {/* Live Sessions Tab */}
               <TabsContent value="live">
                 <Card className="rounded-3xl">
-                  <CardHeader className="flex flex-row items-center justify-between">
-                    <div>
-                      <CardTitle>Live Sessions</CardTitle>
-                      <CardDescription>Schedule and manage live streams</CardDescription>
+                  <CardHeader>
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                      <div>
+                        <CardTitle>Live Sessions</CardTitle>
+                        <CardDescription>Schedule and manage live streams</CardDescription>
+                      </div>
+                      <Button onClick={() => openCreateDialog(true)} className="gap-2 rounded-xl">
+                        <Plus className="w-4 h-4" />
+                        Schedule Live
+                      </Button>
                     </div>
-                    <Button onClick={() => openCreateDialog(true)} className="gap-2 rounded-xl">
-                      <Plus className="w-4 h-4" />
-                      Schedule Live
-                    </Button>
+                    {/* Search */}
+                    <div className="relative mt-4">
+                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                      <Input
+                        type="text"
+                        placeholder="Search live sessions..."
+                        value={liveSearch}
+                        onChange={(e) => setLiveSearch(e.target.value)}
+                        className="pl-10 pr-10 rounded-xl"
+                      />
+                      {liveSearch && (
+                        <button
+                          onClick={() => setLiveSearch('')}
+                          className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                        >
+                          <X className="w-4 h-4" />
+                        </button>
+                      )}
+                    </div>
                   </CardHeader>
                   <CardContent>
                     {loading ? (
@@ -514,7 +585,7 @@ export default function AdminPage() {
                     ) : (
                       <ScrollArea className="h-[600px]">
                         <div className="space-y-3 pr-4">
-                          {sessions.filter(s => s.liveAt).map((session) => {
+                          {filteredLiveSessions.map((session) => {
                             const liveDate = new Date(session.liveAt!);
                             const isPast = liveDate < new Date();
                             
@@ -579,9 +650,9 @@ export default function AdminPage() {
                               </div>
                             );
                           })}
-                          {sessions.filter(s => s.liveAt).length === 0 && (
+                          {filteredLiveSessions.length === 0 && (
                             <div className="text-center py-12 text-muted-foreground">
-                              No live sessions scheduled. Click "Schedule Live" to create one.
+                              {liveSearch ? 'No live sessions match your search.' : 'No live sessions scheduled. Click "Schedule Live" to create one.'}
                             </div>
                           )}
                         </div>
