@@ -45,6 +45,8 @@ import {
   Shield,
   AlertCircle,
   Search,
+  ArrowUp,
+  ArrowDown,
 } from 'lucide-react';
 import { format } from 'date-fns';
 
@@ -80,6 +82,21 @@ interface Theme {
 
 const difficultyOptions = ['beginner', 'intermediate', 'advanced'];
 
+const videoSortOptions = [
+  { value: 'newest', label: 'Newest' },
+  { value: 'oldest', label: 'Oldest' },
+  { value: 'duration-asc', label: 'Shortest' },
+  { value: 'duration-desc', label: 'Longest' },
+];
+
+const liveSortOptions = [
+  { value: 'upcoming', label: 'Upcoming First' },
+  { value: 'newest', label: 'Newest' },
+  { value: 'oldest', label: 'Oldest' },
+  { value: 'duration-asc', label: 'Shortest' },
+  { value: 'duration-desc', label: 'Longest' },
+];
+
 export default function AdminPage() {
   const router = useRouter();
   const { user, loading: authLoading } = useAuth();
@@ -91,9 +108,11 @@ export default function AdminPage() {
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   
-  // Search state
+  // Search and sort state
   const [videoSearch, setVideoSearch] = useState('');
   const [liveSearch, setLiveSearch] = useState('');
+  const [videoSort, setVideoSort] = useState('newest');
+  const [liveSort, setLiveSort] = useState('upcoming');
   
   // Edit/Create dialog state
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -201,31 +220,82 @@ export default function AdminPage() {
     }
   };
 
-  // Filter videos by search
-  const filteredVideos = useMemo(() => {
-    const videos = sessions.filter(s => !s.liveAt);
-    if (!videoSearch.trim()) return videos;
+  // Filter and sort videos
+  const filteredAndSortedVideos = useMemo(() => {
+    let result = sessions.filter(s => !s.liveAt);
     
-    const query = videoSearch.toLowerCase().trim();
-    return videos.filter((session) => 
-      session.title.toLowerCase().includes(query) ||
-      (session.description && session.description.toLowerCase().includes(query)) ||
-      (session.instructor && session.instructor.toLowerCase().includes(query))
-    );
-  }, [sessions, videoSearch]);
+    // Filter by search
+    if (videoSearch.trim()) {
+      const query = videoSearch.toLowerCase().trim();
+      result = result.filter((session) => 
+        session.title.toLowerCase().includes(query) ||
+        (session.description && session.description.toLowerCase().includes(query)) ||
+        (session.instructor && session.instructor.toLowerCase().includes(query))
+      );
+    }
+    
+    // Sort
+    result = [...result].sort((a, b) => {
+      switch (videoSort) {
+        case 'newest':
+          return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+        case 'oldest':
+          return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+        case 'duration-asc':
+          return a.duration - b.duration;
+        case 'duration-desc':
+          return b.duration - a.duration;
+        default:
+          return 0;
+      }
+    });
+    
+    return result;
+  }, [sessions, videoSearch, videoSort]);
 
-  // Filter live sessions by search
-  const filteredLiveSessions = useMemo(() => {
-    const liveSessions = sessions.filter(s => s.liveAt);
-    if (!liveSearch.trim()) return liveSessions;
+  // Filter and sort live sessions
+  const filteredAndSortedLiveSessions = useMemo(() => {
+    let result = sessions.filter(s => s.liveAt);
     
-    const query = liveSearch.toLowerCase().trim();
-    return liveSessions.filter((session) => 
-      session.title.toLowerCase().includes(query) ||
-      (session.description && session.description.toLowerCase().includes(query)) ||
-      (session.instructor && session.instructor.toLowerCase().includes(query))
-    );
-  }, [sessions, liveSearch]);
+    // Filter by search
+    if (liveSearch.trim()) {
+      const query = liveSearch.toLowerCase().trim();
+      result = result.filter((session) => 
+        session.title.toLowerCase().includes(query) ||
+        (session.description && session.description.toLowerCase().includes(query)) ||
+        (session.instructor && session.instructor.toLowerCase().includes(query))
+      );
+    }
+    
+    // Sort
+    result = [...result].sort((a, b) => {
+      switch (liveSort) {
+        case 'upcoming':
+          // Sort by live_at date, upcoming first (future dates before past dates)
+          const now = new Date().getTime();
+          const aTime = new Date(a.liveAt!).getTime();
+          const bTime = new Date(b.liveAt!).getTime();
+          // Future dates first, then sorted by date
+          const aIsPast = aTime < now;
+          const bIsPast = bTime < now;
+          if (aIsPast && !bIsPast) return 1;
+          if (!aIsPast && bIsPast) return -1;
+          return aTime - bTime;
+        case 'newest':
+          return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+        case 'oldest':
+          return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+        case 'duration-asc':
+          return a.duration - b.duration;
+        case 'duration-desc':
+          return b.duration - a.duration;
+        default:
+          return 0;
+      }
+    });
+    
+    return result;
+  }, [sessions, liveSearch, liveSort]);
 
   const resetForm = () => {
     setFormData({
@@ -443,24 +513,44 @@ export default function AdminPage() {
                         Add Video
                       </Button>
                     </div>
-                    {/* Search */}
-                    <div className="relative mt-4">
-                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                      <Input
-                        type="text"
-                        placeholder="Search videos..."
-                        value={videoSearch}
-                        onChange={(e) => setVideoSearch(e.target.value)}
-                        className="pl-10 pr-10 rounded-xl"
-                      />
-                      {videoSearch && (
-                        <button
-                          onClick={() => setVideoSearch('')}
-                          className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                        >
-                          <X className="w-4 h-4" />
-                        </button>
-                      )}
+                    {/* Search and Sort */}
+                    <div className="flex flex-col sm:flex-row gap-3 mt-4">
+                      <div className="relative flex-1">
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                        <Input
+                          type="text"
+                          placeholder="Search videos..."
+                          value={videoSearch}
+                          onChange={(e) => setVideoSearch(e.target.value)}
+                          className="pl-10 pr-10 rounded-xl"
+                        />
+                        {videoSearch && (
+                          <button
+                            onClick={() => setVideoSearch('')}
+                            className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                          >
+                            <X className="w-4 h-4" />
+                          </button>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm text-muted-foreground">Sort:</span>
+                        <div className="flex gap-1">
+                          {videoSortOptions.map((option) => (
+                            <button
+                              key={option.value}
+                              onClick={() => setVideoSort(option.value)}
+                              className={`px-3 py-2 rounded-lg text-sm font-medium transition-all ${
+                                videoSort === option.value
+                                  ? 'bg-primary text-primary-foreground'
+                                  : 'bg-muted hover:bg-muted/80 text-muted-foreground'
+                              }`}
+                            >
+                              {option.label}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
                     </div>
                   </CardHeader>
                   <CardContent>
@@ -471,7 +561,7 @@ export default function AdminPage() {
                     ) : (
                       <ScrollArea className="h-[600px]">
                         <div className="space-y-3 pr-4">
-                          {filteredVideos.map((session) => (
+                          {filteredAndSortedVideos.map((session) => (
                             <div
                               key={session.id}
                               className="flex items-center gap-4 p-4 rounded-2xl bg-muted/50 hover:bg-muted transition-colors"
@@ -531,7 +621,7 @@ export default function AdminPage() {
                               </div>
                             </div>
                           ))}
-                          {filteredVideos.length === 0 && (
+                          {filteredAndSortedVideos.length === 0 && (
                             <div className="text-center py-12 text-muted-foreground">
                               {videoSearch ? 'No videos match your search.' : 'No videos yet. Click "Add Video" to create your first video.'}
                             </div>
@@ -557,24 +647,44 @@ export default function AdminPage() {
                         Schedule Live
                       </Button>
                     </div>
-                    {/* Search */}
-                    <div className="relative mt-4">
-                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                      <Input
-                        type="text"
-                        placeholder="Search live sessions..."
-                        value={liveSearch}
-                        onChange={(e) => setLiveSearch(e.target.value)}
-                        className="pl-10 pr-10 rounded-xl"
-                      />
-                      {liveSearch && (
-                        <button
-                          onClick={() => setLiveSearch('')}
-                          className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                        >
-                          <X className="w-4 h-4" />
-                        </button>
-                      )}
+                    {/* Search and Sort */}
+                    <div className="flex flex-col sm:flex-row gap-3 mt-4">
+                      <div className="relative flex-1">
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                        <Input
+                          type="text"
+                          placeholder="Search live sessions..."
+                          value={liveSearch}
+                          onChange={(e) => setLiveSearch(e.target.value)}
+                          className="pl-10 pr-10 rounded-xl"
+                        />
+                        {liveSearch && (
+                          <button
+                            onClick={() => setLiveSearch('')}
+                            className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                          >
+                            <X className="w-4 h-4" />
+                          </button>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm text-muted-foreground">Sort:</span>
+                        <div className="flex flex-wrap gap-1">
+                          {liveSortOptions.map((option) => (
+                            <button
+                              key={option.value}
+                              onClick={() => setLiveSort(option.value)}
+                              className={`px-3 py-2 rounded-lg text-sm font-medium transition-all ${
+                                liveSort === option.value
+                                  ? 'bg-primary text-primary-foreground'
+                                  : 'bg-muted hover:bg-muted/80 text-muted-foreground'
+                              }`}
+                            >
+                              {option.label}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
                     </div>
                   </CardHeader>
                   <CardContent>
@@ -585,7 +695,7 @@ export default function AdminPage() {
                     ) : (
                       <ScrollArea className="h-[600px]">
                         <div className="space-y-3 pr-4">
-                          {filteredLiveSessions.map((session) => {
+                          {filteredAndSortedLiveSessions.map((session) => {
                             const liveDate = new Date(session.liveAt!);
                             const isPast = liveDate < new Date();
                             
@@ -650,7 +760,7 @@ export default function AdminPage() {
                               </div>
                             );
                           })}
-                          {filteredLiveSessions.length === 0 && (
+                          {filteredAndSortedLiveSessions.length === 0 && (
                             <div className="text-center py-12 text-muted-foreground">
                               {liveSearch ? 'No live sessions match your search.' : 'No live sessions scheduled. Click "Schedule Live" to create one.'}
                             </div>
