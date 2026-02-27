@@ -1,12 +1,5 @@
 import { NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
-import { db } from '@/lib/db';
-
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
-
-// Create a Supabase client for verifying tokens
-const supabase = createClient(supabaseUrl, supabaseAnonKey);
+import { getServerClient } from '@/lib/supabase';
 
 async function getUser(authHeader: string | null) {
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
@@ -14,6 +7,7 @@ async function getUser(authHeader: string | null) {
   }
 
   const token = authHeader.replace('Bearer ', '');
+  const supabase = getServerClient();
   
   try {
     const { data: { user }, error } = await supabase.auth.getUser(token);
@@ -38,20 +32,40 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const favorites = await db.favorite.findMany({
-      where: { userId: user.id },
-      include: {
-        session: {
-          include: {
-            category: true,
-            theme: true,
-          },
-        },
-      },
-      orderBy: { createdAt: 'desc' },
-    });
+    const supabase = getServerClient();
 
-    return NextResponse.json({ favorites });
+    const { data: favorites, error } = await supabase
+      .from('favorites')
+      .select(`
+        id,
+        user_id,
+        session_id,
+        created_at,
+        session:sessions (
+          id,
+          title,
+          slug,
+          description,
+          thumbnail,
+          duration,
+          difficulty,
+          instructor,
+          category:categories ( id, name, slug ),
+          theme:themes ( id, name, slug, color )
+        )
+      `)
+      .eq('user_id', user.id)
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      console.error('Error fetching favorites:', error);
+      return NextResponse.json(
+        { error: 'Failed to fetch favorites' },
+        { status: 500 }
+      );
+    }
+
+    return NextResponse.json({ favorites: favorites || [] });
   } catch (error) {
     console.error('Error fetching favorites:', error);
     return NextResponse.json(
@@ -79,12 +93,16 @@ export async function POST(request: Request) {
       );
     }
 
-    // Check if session exists
-    const session = await db.session.findUnique({
-      where: { id: sessionId },
-    });
+    const supabase = getServerClient();
 
-    if (!session) {
+    // Check if session exists
+    const { data: session, error: sessionError } = await supabase
+      .from('sessions')
+      .select('id')
+      .eq('id', sessionId)
+      .single();
+
+    if (sessionError || !session) {
       return NextResponse.json(
         { error: 'Session not found' },
         { status: 404 }
@@ -92,14 +110,12 @@ export async function POST(request: Request) {
     }
 
     // Check if already favorited
-    const existingFavorite = await db.favorite.findUnique({
-      where: {
-        userId_sessionId: {
-          userId: user.id,
-          sessionId,
-        },
-      },
-    });
+    const { data: existingFavorite, error: checkError } = await supabase
+      .from('favorites')
+      .select('id')
+      .eq('user_id', user.id)
+      .eq('session_id', sessionId)
+      .single();
 
     if (existingFavorite) {
       return NextResponse.json(
@@ -109,12 +125,22 @@ export async function POST(request: Request) {
     }
 
     // Create favorite
-    const favorite = await db.favorite.create({
-      data: {
-        userId: user.id,
-        sessionId,
-      },
-    });
+    const { data: favorite, error: insertError } = await supabase
+      .from('favorites')
+      .insert({
+        user_id: user.id,
+        session_id: sessionId,
+      })
+      .select()
+      .single();
+
+    if (insertError) {
+      console.error('Error adding favorite:', insertError);
+      return NextResponse.json(
+        { error: 'Failed to add favorite' },
+        { status: 500 }
+      );
+    }
 
     return NextResponse.json({ favorite });
   } catch (error) {
@@ -144,13 +170,22 @@ export async function DELETE(request: Request) {
       );
     }
 
+    const supabase = getServerClient();
+
     // Delete favorite
-    await db.favorite.deleteMany({
-      where: {
-        userId: user.id,
-        sessionId,
-      },
-    });
+    const { error } = await supabase
+      .from('favorites')
+      .delete()
+      .eq('user_id', user.id)
+      .eq('session_id', sessionId);
+
+    if (error) {
+      console.error('Error removing favorite:', error);
+      return NextResponse.json(
+        { error: 'Failed to remove favorite' },
+        { status: 500 }
+      );
+    }
 
     return NextResponse.json({ success: true });
   } catch (error) {
