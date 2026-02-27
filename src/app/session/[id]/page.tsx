@@ -715,9 +715,9 @@ export default function SessionPage() {
             </div>
 
             {/* Sidebar - Related Sessions */}
-            <div className="space-y-3">
-              <h2 className="text-lg font-semibold py-2">More Classes</h2>
-              <div className="space-y-2">
+            <div className="space-y-4">
+              <h2 className="text-lg font-semibold">More Classes</h2>
+              <div className="space-y-3">
                 {relatedSessions.map((related) => (
                   <Link 
                     key={related.id} 
@@ -726,7 +726,7 @@ export default function SessionPage() {
                   >
                     <Card className="rounded-xl overflow-hidden hover:shadow-md transition-shadow">
                       <div className="flex gap-3 p-2">
-                        <div className="relative w-16 h-16 rounded-lg overflow-hidden flex-shrink-0 bg-gradient-to-br from-primary/10 to-secondary/20">
+                        <div className="relative w-20 h-20 rounded-lg overflow-hidden flex-shrink-0 bg-gradient-to-br from-primary/10 to-secondary/20">
                           {related.thumbnail ? (
                             <img 
                               src={related.thumbnail} 
@@ -735,11 +735,11 @@ export default function SessionPage() {
                             />
                           ) : (
                             <div className="w-full h-full flex items-center justify-center">
-                              <Play className="w-5 h-5 text-primary/30" />
+                              <Play className="w-6 h-6 text-primary/30" />
                             </div>
                           )}
                         </div>
-                        <div className="flex-1 min-w-0 py-1">
+                        <div className="flex-1 min-w-0 py-0.5">
                           <h3 className="font-medium text-sm line-clamp-2">{related.title}</h3>
                           <div className="flex items-center gap-2 mt-1">
                             <Badge 
