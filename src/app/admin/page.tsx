@@ -183,6 +183,20 @@ export default function AdminPage() {
     }
   }, [user]);
 
+  // Refetch data when tab becomes visible again
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible' && user) {
+        fetchData();
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [user]);
+
   const fetchData = async () => {
     console.log('📊 Admin fetchData called');
     setLoading(true);
