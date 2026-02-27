@@ -229,7 +229,12 @@ export default function SettingsPage() {
         .limit(20);
       
       if (error) {
-        console.error('Error loading watch history:', error);
+        // If table doesn't exist or RLS issue, just show empty state
+        if (error.code === 'PGRST116' || error.code === '42P01' || error.message?.includes('does not exist')) {
+          console.log('Watch history table not available');
+        } else {
+          console.error('Error loading watch history:', error.code, error.message);
+        }
         setWatchHistory([]);
       } else {
         setWatchHistory(data || []);

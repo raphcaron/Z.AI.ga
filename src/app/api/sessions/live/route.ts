@@ -23,6 +23,7 @@ export async function GET() {
         instructor,
         is_live,
         live_at,
+        streaming_now,
         category:categories ( name ),
         theme:themes ( name, color )
       `)
@@ -43,7 +44,10 @@ export async function GET() {
     const formattedSessions = (sessions || []).map((s: any) => {
       const liveAt = new Date(s.live_at);
       const liveEndTime = new Date(liveAt.getTime() + (s.duration || 60) * 60 * 1000);
-      const isCurrentlyLive = liveAt <= now && now <= liveEndTime;
+      
+      // A session is live if streaming_now is true OR if we're within the scheduled time window
+      const isTimeBasedLive = liveAt <= now && now <= liveEndTime;
+      const isCurrentlyLive = s.streaming_now || isTimeBasedLive;
 
       return {
         id: s.id,
@@ -56,9 +60,20 @@ export async function GET() {
         instructor: s.instructor,
         liveAt: s.live_at,
         isLive: isCurrentlyLive,
+        streamingNow: s.streaming_now || false,
         category: s.category,
         theme: s.theme,
       };
+    });
+
+    // Sort: streaming now first, then upcoming, then past
+    formattedSessions.sort((a, b) => {
+      // Streaming now sessions first
+      if (a.streamingNow && !b.streamingNow) return -1;
+      if (!a.streamingNow && b.streamingNow) return 1;
+      
+      // Then by live_at date
+      return new Date(a.liveAt).getTime() - new Date(b.liveAt).getTime();
     });
 
     return NextResponse.json({

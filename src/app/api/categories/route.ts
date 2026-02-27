@@ -8,17 +8,18 @@ export async function GET() {
     
     const { data: categories, error } = await supabase
       .from('categories')
-      .select('*')
-      .order('order', { ascending: true });
+      .select('id, name')
+      .order('name', { ascending: true });
 
     if (error) {
       console.error('Error fetching categories:', error);
       return NextResponse.json(
-        { error: 'Failed to fetch categories' },
+        { error: 'Failed to fetch categories', details: error },
         { status: 500 }
       );
     }
 
+    console.log('✅ Categories fetched:', categories?.length || 0);
     return NextResponse.json({ categories: categories || [] });
   } catch (error) {
     console.error('Error fetching categories:', error);

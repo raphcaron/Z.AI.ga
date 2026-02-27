@@ -15,6 +15,7 @@ interface LiveSessionCardProps {
     scheduledAt: string;
     thumbnail: string | null;
     isLive: boolean;
+    streamingNow?: boolean;
     viewerCount?: number;
   };
 }
@@ -44,9 +45,9 @@ export function LiveSessionCard({ session }: LiveSessionCardProps) {
         {/* Live badge */}
         {session.isLive && (
           <div className="absolute top-4 left-4 z-10">
-            <Badge className="bg-red-500 hover:bg-red-500 text-white gap-1.5 px-3 py-1 animate-pulse">
+            <Badge className={`gap-1.5 px-3 py-1 ${session.streamingNow ? 'bg-red-500 hover:bg-red-500 text-white animate-pulse' : 'bg-red-500/80 hover:bg-red-500/80 text-white'}`}>
               <span className="w-2 h-2 bg-white rounded-full" />
-              LIVE
+              {session.streamingNow ? 'LIVE NOW' : 'LIVE'}
             </Badge>
           </div>
         )}

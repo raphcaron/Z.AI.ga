@@ -47,6 +47,12 @@ import {
   Search,
   ArrowUp,
   ArrowDown,
+  Circle,
+  Upload,
+  Image as ImageIcon,
+  Tag,
+  Palette,
+  FolderOpen,
 } from 'lucide-react';
 import { format } from 'date-fns';
 
@@ -63,6 +69,7 @@ interface Session {
   isLive: boolean;
   liveAt: string | null;
   isPublished: boolean;
+  streamingNow: boolean;
   categoryId: string | null;
   themeId: string | null;
   category: { name: string } | null;
@@ -73,11 +80,16 @@ interface Session {
 interface Category {
   id: string;
   name: string;
+  slug: string;
+  description: string | null;
 }
 
 interface Theme {
   id: string;
   name: string;
+  slug: string;
+  description: string | null;
+  color: string | null;
 }
 
 const difficultyOptions = ['beginner', 'intermediate', 'advanced'];
@@ -85,16 +97,6 @@ const difficultyOptions = ['beginner', 'intermediate', 'advanced'];
 const videoSortOptions = [
   { value: 'newest', label: 'Newest' },
   { value: 'oldest', label: 'Oldest' },
-  { value: 'duration-asc', label: 'Shortest' },
-  { value: 'duration-desc', label: 'Longest' },
-];
-
-const liveSortOptions = [
-  { value: 'upcoming', label: 'Upcoming First' },
-  { value: 'newest', label: 'Newest' },
-  { value: 'oldest', label: 'Oldest' },
-  { value: 'duration-asc', label: 'Shortest' },
-  { value: 'duration-desc', label: 'Longest' },
 ];
 
 export default function AdminPage() {
@@ -108,11 +110,10 @@ export default function AdminPage() {
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   
-  // Search and sort state
+  // Search state
   const [videoSearch, setVideoSearch] = useState('');
   const [liveSearch, setLiveSearch] = useState('');
   const [videoSort, setVideoSort] = useState('newest');
-  const [liveSort, setLiveSort] = useState('upcoming');
   
   // Edit/Create dialog state
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -133,6 +134,20 @@ export default function AdminPage() {
     isPublished: true,
     liveAt: '',
   });
+  
+  // Upload state
+  const [uploadingThumbnail, setUploadingThumbnail] = useState(false);
+  const [uploadingVideo, setUploadingVideo] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const [seeding, setSeeding] = useState(false);
+  
+  // Category/Theme editing state
+  const [categoryDialogOpen, setCategoryDialogOpen] = useState(false);
+  const [themeDialogOpen, setThemeDialogOpen] = useState(false);
+  const [editingCategory, setEditingCategory] = useState<Category | null>(null);
+  const [editingTheme, setEditingTheme] = useState<Theme | null>(null);
+  const [categoryForm, setCategoryForm] = useState({ name: '', slug: '', description: '' });
+  const [themeForm, setThemeForm] = useState({ name: '', slug: '', description: '', color: '#6366F1' });
 
   // Check if user is admin (for demo, check user_metadata or allow all logged-in users)
   const isAdmin = user?.user_metadata?.is_admin || true; // For demo, all logged-in users are admins
@@ -168,6 +183,7 @@ export default function AdminPage() {
           is_live,
           live_at,
           is_published,
+          streaming_now,
           category_id,
           theme_id,
           created_at,
@@ -181,16 +197,26 @@ export default function AdminPage() {
       }
 
       // Fetch categories
-      const { data: categoriesData } = await supabase
+      const { data: categoriesData, error: categoriesError } = await supabase
         .from('categories')
-        .select('id, name')
+        .select('id, name, slug, description')
         .order('name');
+      
+      if (categoriesError) {
+        console.error('Error fetching categories:', categoriesError);
+      }
+      console.log('📊 Categories fetched:', categoriesData?.length || 0, categoriesData);
 
       // Fetch themes
-      const { data: themesData } = await supabase
+      const { data: themesData, error: themesError } = await supabase
         .from('themes')
-        .select('id, name')
+        .select('id, name, slug, description, color')
         .order('name');
+      
+      if (themesError) {
+        console.error('Error fetching themes:', themesError);
+      }
+      console.log('📊 Themes fetched:', themesData?.length || 0, themesData);
 
       setSessions((sessionsData || []).map((s: any) => ({
         id: s.id,
@@ -205,6 +231,7 @@ export default function AdminPage() {
         isLive: s.is_live,
         liveAt: s.live_at,
         isPublished: s.is_published,
+        streamingNow: s.streaming_now || false,
         categoryId: s.category_id,
         themeId: s.theme_id,
         category: s.category,
@@ -241,10 +268,6 @@ export default function AdminPage() {
           return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
         case 'oldest':
           return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
-        case 'duration-asc':
-          return a.duration - b.duration;
-        case 'duration-desc':
-          return b.duration - a.duration;
         default:
           return 0;
       }
@@ -253,9 +276,10 @@ export default function AdminPage() {
     return result;
   }, [sessions, videoSearch, videoSort]);
 
-  // Filter and sort live sessions
-  const filteredAndSortedLiveSessions = useMemo(() => {
-    let result = sessions.filter(s => s.liveAt);
+  // Filter and sort live sessions - Upcoming (including currently streaming)
+  const upcomingLiveSessions = useMemo(() => {
+    const now = new Date().getTime();
+    let result = sessions.filter(s => s.liveAt && (new Date(s.liveAt).getTime() >= now || s.streamingNow));
     
     // Filter by search
     if (liveSearch.trim()) {
@@ -267,35 +291,43 @@ export default function AdminPage() {
       );
     }
     
-    // Sort
+    // Sort - streaming now first, then by date
     result = [...result].sort((a, b) => {
-      switch (liveSort) {
-        case 'upcoming':
-          // Sort by live_at date, upcoming first (future dates before past dates)
-          const now = new Date().getTime();
-          const aTime = new Date(a.liveAt!).getTime();
-          const bTime = new Date(b.liveAt!).getTime();
-          // Future dates first, then sorted by date
-          const aIsPast = aTime < now;
-          const bIsPast = bTime < now;
-          if (aIsPast && !bIsPast) return 1;
-          if (!aIsPast && bIsPast) return -1;
-          return aTime - bTime;
-        case 'newest':
-          return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
-        case 'oldest':
-          return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
-        case 'duration-asc':
-          return a.duration - b.duration;
-        case 'duration-desc':
-          return b.duration - a.duration;
-        default:
-          return 0;
-      }
+      // Streaming now sessions first
+      if (a.streamingNow && !b.streamingNow) return -1;
+      if (!a.streamingNow && b.streamingNow) return 1;
+      
+      // Then by live_at date
+      const aTime = new Date(a.liveAt!).getTime();
+      const bTime = new Date(b.liveAt!).getTime();
+      return aTime - bTime;
     });
     
     return result;
-  }, [sessions, liveSearch, liveSort]);
+  }, [sessions, liveSearch]);
+
+  // Filter and sort live sessions - Past
+  const pastLiveSessions = useMemo(() => {
+    const now = new Date().getTime();
+    let result = sessions.filter(s => s.liveAt && new Date(s.liveAt).getTime() < now && !s.streamingNow);
+    
+    // Filter by search
+    if (liveSearch.trim()) {
+      const query = liveSearch.toLowerCase().trim();
+      result = result.filter((session) => 
+        session.title.toLowerCase().includes(query) ||
+        (session.description && session.description.toLowerCase().includes(query)) ||
+        (session.instructor && session.instructor.toLowerCase().includes(query))
+      );
+    }
+    
+    // Sort by live_at date descending (most recent past first)
+    result = [...result].sort((a, b) => {
+      return new Date(b.liveAt!).getTime() - new Date(a.liveAt!).getTime();
+    });
+    
+    return result;
+  }, [sessions, liveSearch]);
 
   const resetForm = () => {
     setFormData({
@@ -340,6 +372,17 @@ export default function AdminPage() {
     setDialogOpen(true);
   };
 
+  // Helper function with timeout
+  const withTimeout = <T,>(promise: Promise<T>, timeoutMs: number = 15000): Promise<T> => {
+    return new Promise((resolve, reject) => {
+      const timer = setTimeout(() => reject(new Error('Request timed out. Please try again.')), timeoutMs);
+      promise
+        .then(resolve)
+        .catch(reject)
+        .finally(() => clearTimeout(timer));
+    });
+  };
+
   const handleSave = async () => {
     if (!formData.title) {
       setMessage({ type: 'error', text: 'Title is required' });
@@ -371,31 +414,43 @@ export default function AdminPage() {
         theme_id: formData.themeId || null,
       };
 
+      console.log('Saving session:', sessionData);
+
       if (editingSession) {
         // Update existing session
-        const { error } = await supabase
-          .from('sessions')
-          .update(sessionData)
-          .eq('id', editingSession.id);
+        const result = await withTimeout(
+          supabase
+            .from('sessions')
+            .update(sessionData)
+            .eq('id', editingSession.id)
+        );
 
-        if (error) throw error;
+        if (result.error) {
+          console.error('Supabase update error:', result.error);
+          throw new Error(result.error.message || 'Failed to update session');
+        }
         setMessage({ type: 'success', text: 'Session updated successfully!' });
       } else {
         // Create new session
-        const { error } = await supabase
-          .from('sessions')
-          .insert(sessionData);
+        const result = await withTimeout(
+          supabase
+            .from('sessions')
+            .insert(sessionData)
+        );
 
-        if (error) throw error;
+        if (result.error) {
+          console.error('Supabase insert error:', result.error);
+          throw new Error(result.error.message || 'Failed to create session');
+        }
         setMessage({ type: 'success', text: 'Session created successfully!' });
       }
 
       setDialogOpen(false);
       resetForm();
       fetchData();
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error saving session:', error);
-      setMessage({ type: 'error', text: 'Failed to save session' });
+      setMessage({ type: 'error', text: error?.message || 'Failed to save session' });
     } finally {
       setSaving(false);
     }
@@ -435,6 +490,296 @@ export default function AdminPage() {
     }
   };
 
+  // Handle thumbnail upload
+  const handleThumbnailUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    
+    // Use the session ID if editing, otherwise generate a temp ID
+    const sessionId = editingSession?.id || `temp-${Date.now()}`;
+    
+    setUploadingThumbnail(true);
+    try {
+      const formDataUpload = new FormData();
+      formDataUpload.append('file', file);
+      formDataUpload.append('sessionId', sessionId);
+      
+      const response = await fetch('/api/upload/thumbnail', {
+        method: 'POST',
+        body: formDataUpload,
+      });
+      
+      const data = await response.json();
+      
+      if (data.success) {
+        setFormData({ ...formData, thumbnail: data.url });
+        setMessage({ type: 'success', text: 'Thumbnail uploaded!' });
+      } else {
+        throw new Error(data.error);
+      }
+    } catch (error) {
+      console.error('Error uploading thumbnail:', error);
+      setMessage({ type: 'error', text: 'Failed to upload thumbnail' });
+    } finally {
+      setUploadingThumbnail(false);
+    }
+  };
+  
+  // Handle video upload
+  const handleVideoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    
+    // Use the session ID if editing, otherwise generate a temp ID
+    const sessionId = editingSession?.id || `temp-${Date.now()}`;
+    
+    setUploadingVideo(true);
+    setUploadProgress(0);
+    
+    try {
+      const formDataUpload = new FormData();
+      formDataUpload.append('file', file);
+      formDataUpload.append('sessionId', sessionId);
+      
+      const response = await fetch('/api/upload/video', {
+        method: 'POST',
+        body: formDataUpload,
+      });
+      
+      const data = await response.json();
+      
+      if (data.success) {
+        setFormData({ ...formData, videoUrl: data.url });
+        setMessage({ type: 'success', text: 'Video uploaded!' });
+      } else {
+        throw new Error(data.error);
+      }
+    } catch (error) {
+      console.error('Error uploading video:', error);
+      setMessage({ type: 'error', text: 'Failed to upload video' });
+    } finally {
+      setUploadingVideo(false);
+      setUploadProgress(0);
+    }
+  };
+
+  const toggleStreamingNow = async (session: Session) => {
+    try {
+      // If turning on streaming, first turn off all other sessions
+      if (!session.streamingNow) {
+        await supabase
+          .from('sessions')
+          .update({ streaming_now: false })
+          .eq('streaming_now', true);
+      }
+      
+      // Then toggle this session
+      const { error } = await supabase
+        .from('sessions')
+        .update({ streaming_now: !session.streamingNow })
+        .eq('id', session.id);
+
+      if (error) throw error;
+      setMessage({ 
+        type: 'success', 
+        text: !session.streamingNow 
+          ? `${session.title} is now live!` 
+          : 'Stream ended' 
+      });
+      fetchData();
+    } catch (error) {
+      console.error('Error toggling streaming:', error);
+      setMessage({ type: 'error', text: 'Failed to update streaming status' });
+    }
+  };
+
+  // Seed data with auth token
+  const handleSeedData = async () => {
+    setSeeding(true);
+    setMessage(null);
+    try {
+      // Get the current session to pass auth token
+      const { data: { session } } = await supabase.auth.getSession();
+      
+      const response = await fetch('/api/seed-videos', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session?.access_token || ''}`,
+        },
+      });
+      
+      const result = await response.json();
+      
+      if (!response.ok) {
+        throw new Error(result.error || 'Failed to seed data');
+      }
+      
+      setMessage({ type: 'success', text: result.message || 'Data seeded successfully!' });
+      fetchData();
+    } catch (error: any) {
+      console.error('Error seeding data:', error);
+      setMessage({ type: 'error', text: error?.message || 'Failed to seed data' });
+    } finally {
+      setSeeding(false);
+    }
+  };
+
+  // Category handlers
+  const openCategoryDialog = (category: Category | null = null) => {
+    if (category) {
+      setEditingCategory(category);
+      setCategoryForm({
+        name: category.name,
+        slug: category.slug,
+        description: category.description || '',
+      });
+    } else {
+      setEditingCategory(null);
+      setCategoryForm({ name: '', slug: '', description: '' });
+    }
+    setCategoryDialogOpen(true);
+  };
+
+  const handleSaveCategory = async () => {
+    if (!categoryForm.name || !categoryForm.slug) {
+      setMessage({ type: 'error', text: 'Name and slug are required' });
+      return;
+    }
+
+    setSaving(true);
+    try {
+      if (editingCategory) {
+        const { error } = await supabase
+          .from('categories')
+          .update({
+            name: categoryForm.name,
+            slug: categoryForm.slug,
+            description: categoryForm.description || null,
+          })
+          .eq('id', editingCategory.id);
+        if (error) throw error;
+        setMessage({ type: 'success', text: 'Category updated!' });
+      } else {
+        const { error } = await supabase
+          .from('categories')
+          .insert({
+            name: categoryForm.name,
+            slug: categoryForm.slug,
+            description: categoryForm.description || null,
+          });
+        if (error) throw error;
+        setMessage({ type: 'success', text: 'Category created!' });
+      }
+      setCategoryDialogOpen(false);
+      fetchData();
+    } catch (error: any) {
+      console.error('Error saving category:', error);
+      setMessage({ type: 'error', text: error?.message || 'Failed to save category' });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleDeleteCategory = async (category: Category) => {
+    if (!confirm(`Delete category "${category.name}"?`)) return;
+    try {
+      const { error } = await supabase
+        .from('categories')
+        .delete()
+        .eq('id', category.id);
+      if (error) throw error;
+      setMessage({ type: 'success', text: 'Category deleted!' });
+      fetchData();
+    } catch (error: any) {
+      console.error('Error deleting category:', error);
+      setMessage({ type: 'error', text: error?.message || 'Failed to delete category' });
+    }
+  };
+
+  // Theme handlers
+  const openThemeDialog = (theme: Theme | null = null) => {
+    if (theme) {
+      setEditingTheme(theme);
+      setThemeForm({
+        name: theme.name,
+        slug: theme.slug,
+        description: theme.description || '',
+        color: theme.color || '#6366F1',
+      });
+    } else {
+      setEditingTheme(null);
+      setThemeForm({ name: '', slug: '', description: '', color: '#6366F1' });
+    }
+    setThemeDialogOpen(true);
+  };
+
+  const handleSaveTheme = async () => {
+    if (!themeForm.name || !themeForm.slug) {
+      setMessage({ type: 'error', text: 'Name and slug are required' });
+      return;
+    }
+
+    setSaving(true);
+    try {
+      if (editingTheme) {
+        const { error } = await supabase
+          .from('themes')
+          .update({
+            name: themeForm.name,
+            slug: themeForm.slug,
+            description: themeForm.description || null,
+            color: themeForm.color,
+          })
+          .eq('id', editingTheme.id);
+        if (error) throw error;
+        setMessage({ type: 'success', text: 'Theme updated!' });
+      } else {
+        const { error } = await supabase
+          .from('themes')
+          .insert({
+            name: themeForm.name,
+            slug: themeForm.slug,
+            description: themeForm.description || null,
+            color: themeForm.color,
+          });
+        if (error) throw error;
+        setMessage({ type: 'success', text: 'Theme created!' });
+      }
+      setThemeDialogOpen(false);
+      fetchData();
+    } catch (error: any) {
+      console.error('Error saving theme:', error);
+      setMessage({ type: 'error', text: error?.message || 'Failed to save theme' });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleDeleteTheme = async (theme: Theme) => {
+    if (!confirm(`Delete theme "${theme.name}"?`)) return;
+    try {
+      const { error } = await supabase
+        .from('themes')
+        .delete()
+        .eq('id', theme.id);
+      if (error) throw error;
+      setMessage({ type: 'success', text: 'Theme deleted!' });
+      fetchData();
+    } catch (error: any) {
+      console.error('Error deleting theme:', error);
+      setMessage({ type: 'error', text: error?.message || 'Failed to delete theme' });
+    }
+  };
+
+  // Auto-generate slug from name
+  const generateSlug = (name: string) => {
+    return name
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-|-$/g, '');
+  };
+
   if (authLoading || !user) {
     return (
       <div className="min-h-screen flex flex-col bg-background">
@@ -455,13 +800,30 @@ export default function AdminPage() {
         {/* Header */}
         <section className="py-8 border-b border-border bg-gradient-to-b from-primary/5 to-background">
           <div className="container mx-auto px-4">
-            <div className="flex items-center gap-3 mb-2">
-              <Shield className="w-6 h-6 text-primary" />
-              <h1 className="text-3xl md:text-4xl font-bold">Admin Dashboard</h1>
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div>
+                <div className="flex items-center gap-3 mb-2">
+                  <Shield className="w-6 h-6 text-primary" />
+                  <h1 className="text-3xl md:text-4xl font-bold">Admin Dashboard</h1>
+                </div>
+                <p className="text-muted-foreground">
+                  Manage videos, live sessions, categories, and themes
+                </p>
+              </div>
+              <Button 
+                onClick={handleSeedData} 
+                disabled={seeding}
+                variant="outline"
+                className="gap-2 rounded-xl"
+              >
+                {seeding ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  <Plus className="w-4 h-4" />
+                )}
+                Seed Demo Data
+              </Button>
             </div>
-            <p className="text-muted-foreground">
-              Manage videos, live sessions, categories, and themes
-            </p>
           </div>
         </section>
 
@@ -488,7 +850,7 @@ export default function AdminPage() {
             )}
 
             <Tabs defaultValue="videos" className="w-full">
-              <TabsList className="grid w-full grid-cols-2 rounded-full mb-8 h-auto p-1.5 bg-muted">
+              <TabsList className="grid w-full grid-cols-3 rounded-full mb-8 h-auto p-1.5 bg-muted">
                 <TabsTrigger value="videos" className="rounded-full gap-2 py-3 px-4 data-[state=active]:bg-background data-[state=active]:shadow-sm">
                   <Video className="w-5 h-5" />
                   Videos
@@ -496,6 +858,10 @@ export default function AdminPage() {
                 <TabsTrigger value="live" className="rounded-full gap-2 py-3 px-4 data-[state=active]:bg-background data-[state=active]:shadow-sm">
                   <RadioTower className="w-5 h-5" />
                   Live Sessions
+                </TabsTrigger>
+                <TabsTrigger value="categories" className="rounded-full gap-2 py-3 px-4 data-[state=active]:bg-background data-[state=active]:shadow-sm">
+                  <FolderOpen className="w-5 h-5" />
+                  Categories & Themes
                 </TabsTrigger>
               </TabsList>
 
@@ -635,69 +1001,54 @@ export default function AdminPage() {
 
               {/* Live Sessions Tab */}
               <TabsContent value="live">
-                <Card className="rounded-3xl">
-                  <CardHeader>
-                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                      <div>
-                        <CardTitle>Live Sessions</CardTitle>
-                        <CardDescription>Schedule and manage live streams</CardDescription>
+                <div className="space-y-6">
+                  {/* Upcoming Live Sessions */}
+                  <Card className="rounded-3xl">
+                    <CardHeader>
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                        <div>
+                          <CardTitle className="flex items-center gap-2">
+                            <RadioTower className="w-5 h-5" />
+                            Upcoming & Live
+                          </CardTitle>
+                          <CardDescription>Scheduled live streams and sessions currently streaming</CardDescription>
+                        </div>
+                        <Button onClick={() => openCreateDialog(true)} className="gap-2 rounded-xl">
+                          <Plus className="w-4 h-4" />
+                          Schedule Live
+                        </Button>
                       </div>
-                      <Button onClick={() => openCreateDialog(true)} className="gap-2 rounded-xl">
-                        <Plus className="w-4 h-4" />
-                        Schedule Live
-                      </Button>
-                    </div>
-                    {/* Search and Sort */}
-                    <div className="flex flex-col sm:flex-row gap-3 mt-4">
-                      <div className="relative flex-1">
-                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                        <Input
-                          type="text"
-                          placeholder="Search live sessions..."
-                          value={liveSearch}
-                          onChange={(e) => setLiveSearch(e.target.value)}
-                          className="pl-10 pr-10 rounded-xl"
-                        />
-                        {liveSearch && (
-                          <button
-                            onClick={() => setLiveSearch('')}
-                            className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                          >
-                            <X className="w-4 h-4" />
-                          </button>
-                        )}
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <span className="text-sm text-muted-foreground">Sort:</span>
-                        <div className="flex flex-wrap gap-1">
-                          {liveSortOptions.map((option) => (
+                      {/* Search */}
+                      <div className="flex flex-col sm:flex-row gap-3 mt-4">
+                        <div className="relative flex-1">
+                          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                          <Input
+                            type="text"
+                            placeholder="Search live sessions..."
+                            value={liveSearch}
+                            onChange={(e) => setLiveSearch(e.target.value)}
+                            className="pl-10 pr-10 rounded-xl"
+                          />
+                          {liveSearch && (
                             <button
-                              key={option.value}
-                              onClick={() => setLiveSort(option.value)}
-                              className={`px-3 py-2 rounded-lg text-sm font-medium transition-all ${
-                                liveSort === option.value
-                                  ? 'bg-primary text-primary-foreground'
-                                  : 'bg-muted hover:bg-muted/80 text-muted-foreground'
-                              }`}
+                              onClick={() => setLiveSearch('')}
+                              className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
                             >
-                              {option.label}
+                              <X className="w-4 h-4" />
                             </button>
-                          ))}
+                          )}
                         </div>
                       </div>
-                    </div>
-                  </CardHeader>
-                  <CardContent>
-                    {loading ? (
-                      <div className="flex items-center justify-center py-16">
-                        <Loader2 className="w-8 h-8 animate-spin text-primary" />
-                      </div>
-                    ) : (
-                      <ScrollArea className="h-[600px]">
-                        <div className="space-y-3 pr-4">
-                          {filteredAndSortedLiveSessions.map((session) => {
+                    </CardHeader>
+                    <CardContent>
+                      {loading ? (
+                        <div className="flex items-center justify-center py-16">
+                          <Loader2 className="w-8 h-8 animate-spin text-primary" />
+                        </div>
+                      ) : (
+                        <div className="space-y-3">
+                          {upcomingLiveSessions.map((session) => {
                             const liveDate = new Date(session.liveAt!);
-                            const isPast = liveDate < new Date();
                             
                             return (
                               <div
@@ -719,12 +1070,117 @@ export default function AdminPage() {
                                 <div className="flex-1 min-w-0">
                                   <div className="flex items-center gap-2 mb-1">
                                     <h3 className="font-semibold line-clamp-1">{session.title}</h3>
-                                    <Badge variant={isPast ? "secondary" : "default"} className="text-xs">
-                                      {isPast ? 'Past' : 'Upcoming'}
-                                    </Badge>
-                                    {session.isLive && (
-                                      <Badge className="bg-red-500 text-white text-xs animate-pulse">LIVE</Badge>
+                                    {session.streamingNow ? (
+                                      <Badge className="bg-red-500 text-white text-xs animate-pulse flex items-center gap-1">
+                                        <Circle className="w-2 h-2 fill-current" />
+                                        LIVE NOW
+                                      </Badge>
+                                    ) : (
+                                      <Badge variant="default" className="text-xs">
+                                        Upcoming
+                                      </Badge>
                                     )}
+                                  </div>
+                                  <div className="flex items-center gap-3 text-sm text-muted-foreground">
+                                    <span className="flex items-center gap-1">
+                                      <Calendar className="w-3 h-3" />
+                                      {format(liveDate, 'MMM d, yyyy')}
+                                    </span>
+                                    <span className="flex items-center gap-1">
+                                      <Clock className="w-3 h-3" />
+                                      {format(liveDate, 'h:mm a')}
+                                    </span>
+                                  </div>
+                                </div>
+
+                                {/* Actions */}
+                                <div className="flex items-center gap-2">
+                                  {/* Go Live Toggle */}
+                                  <Button
+                                    variant={session.streamingNow ? "destructive" : "default"}
+                                    size="sm"
+                                    onClick={() => toggleStreamingNow(session)}
+                                    className="rounded-lg gap-1"
+                                  >
+                                    <Circle className={`w-2 h-2 ${session.streamingNow ? 'fill-current animate-pulse' : 'fill-current'}`} />
+                                    {session.streamingNow ? 'End Stream' : 'Go Live'}
+                                  </Button>
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => openEditDialog(session)}
+                                    className="rounded-lg"
+                                  >
+                                    <Pencil className="w-4 h-4" />
+                                  </Button>
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => handleDelete(session)}
+                                    className="rounded-lg text-destructive hover:bg-destructive/10"
+                                  >
+                                    <Trash2 className="w-4 h-4" />
+                                  </Button>
+                                </div>
+                              </div>
+                            );
+                          })}
+                          {upcomingLiveSessions.length === 0 && (
+                            <div className="text-center py-12 text-muted-foreground">
+                              {liveSearch ? 'No upcoming sessions match your search.' : 'No upcoming live sessions. Click "Schedule Live" to create one.'}
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </CardContent>
+                  </Card>
+
+                  {/* Past Live Sessions */}
+                  <Card className="rounded-3xl">
+                    <CardHeader>
+                      <CardTitle className="flex items-center gap-2">
+                        <Clock className="w-5 h-5" />
+                        Past Sessions
+                      </CardTitle>
+                      <CardDescription>Completed live streams</CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                      {loading ? (
+                        <div className="flex items-center justify-center py-8">
+                          <Loader2 className="w-8 h-8 animate-spin text-primary" />
+                        </div>
+                      ) : pastLiveSessions.length === 0 ? (
+                        <div className="text-center py-8 text-muted-foreground">
+                          {liveSearch ? 'No past sessions match your search.' : 'No past live sessions yet.'}
+                        </div>
+                      ) : (
+                        <div className="space-y-3">
+                          {pastLiveSessions.map((session) => {
+                            const liveDate = new Date(session.liveAt!);
+                            
+                            return (
+                              <div
+                                key={session.id}
+                                className="flex items-center gap-4 p-4 rounded-2xl bg-muted/30 hover:bg-muted/50 transition-colors opacity-75"
+                              >
+                                {/* Thumbnail */}
+                                <div className="relative w-24 h-16 rounded-xl overflow-hidden flex-shrink-0 bg-gradient-to-br from-primary/10 to-secondary/20">
+                                  {session.thumbnail ? (
+                                    <img src={session.thumbnail} alt={session.title} className="w-full h-full object-cover grayscale-[30%]" />
+                                  ) : (
+                                    <div className="w-full h-full flex items-center justify-center">
+                                      <RadioTower className="w-6 h-6 text-primary/30" />
+                                    </div>
+                                  )}
+                                </div>
+
+                                {/* Info */}
+                                <div className="flex-1 min-w-0">
+                                  <div className="flex items-center gap-2 mb-1">
+                                    <h3 className="font-semibold line-clamp-1">{session.title}</h3>
+                                    <Badge variant="secondary" className="text-xs">
+                                      Completed
+                                    </Badge>
                                   </div>
                                   <div className="flex items-center gap-3 text-sm text-muted-foreground">
                                     <span className="flex items-center gap-1">
@@ -760,16 +1216,146 @@ export default function AdminPage() {
                               </div>
                             );
                           })}
-                          {filteredAndSortedLiveSessions.length === 0 && (
-                            <div className="text-center py-12 text-muted-foreground">
-                              {liveSearch ? 'No live sessions match your search.' : 'No live sessions scheduled. Click "Schedule Live" to create one.'}
+                        </div>
+                      )}
+                    </CardContent>
+                  </Card>
+                </div>
+              </TabsContent>
+
+              {/* Categories & Themes Tab */}
+              <TabsContent value="categories">
+                <div className="grid md:grid-cols-2 gap-6">
+                  {/* Categories Card */}
+                  <Card className="rounded-3xl">
+                    <CardHeader>
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <CardTitle className="flex items-center gap-2">
+                            <Tag className="w-5 h-5" />
+                            Categories
+                          </CardTitle>
+                          <CardDescription>Yoga class categories</CardDescription>
+                        </div>
+                        <Button onClick={() => openCategoryDialog(null)} size="sm" className="gap-2 rounded-xl">
+                          <Plus className="w-4 h-4" />
+                          Add
+                        </Button>
+                      </div>
+                    </CardHeader>
+                    <CardContent>
+                      {loading ? (
+                        <div className="flex items-center justify-center py-8">
+                          <Loader2 className="w-6 h-6 animate-spin text-primary" />
+                        </div>
+                      ) : (
+                        <div className="space-y-2">
+                          {categories.map((category) => (
+                            <div
+                              key={category.id}
+                              className="flex items-center gap-3 p-3 rounded-xl bg-muted/50 hover:bg-muted transition-colors"
+                            >
+                              <div className="flex-1 min-w-0">
+                                <div className="font-medium">{category.name}</div>
+                                <div className="text-xs text-muted-foreground">{category.slug}</div>
+                              </div>
+                              <div className="flex items-center gap-1">
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => openCategoryDialog(category)}
+                                  className="rounded-lg"
+                                >
+                                  <Pencil className="w-4 h-4" />
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => handleDeleteCategory(category)}
+                                  className="rounded-lg text-destructive hover:bg-destructive/10"
+                                >
+                                  <Trash2 className="w-4 h-4" />
+                                </Button>
+                              </div>
+                            </div>
+                          ))}
+                          {categories.length === 0 && (
+                            <div className="text-center py-8 text-muted-foreground">
+                              No categories yet. Click "Add" to create one.
                             </div>
                           )}
                         </div>
-                      </ScrollArea>
-                    )}
-                  </CardContent>
-                </Card>
+                      )}
+                    </CardContent>
+                  </Card>
+
+                  {/* Themes Card */}
+                  <Card className="rounded-3xl">
+                    <CardHeader>
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <CardTitle className="flex items-center gap-2">
+                            <Palette className="w-5 h-5" />
+                            Themes
+                          </CardTitle>
+                          <CardDescription>Class themes and focuses</CardDescription>
+                        </div>
+                        <Button onClick={() => openThemeDialog(null)} size="sm" className="gap-2 rounded-xl">
+                          <Plus className="w-4 h-4" />
+                          Add
+                        </Button>
+                      </div>
+                    </CardHeader>
+                    <CardContent>
+                      {loading ? (
+                        <div className="flex items-center justify-center py-8">
+                          <Loader2 className="w-6 h-6 animate-spin text-primary" />
+                        </div>
+                      ) : (
+                        <div className="space-y-2">
+                          {themes.map((theme) => (
+                            <div
+                              key={theme.id}
+                              className="flex items-center gap-3 p-3 rounded-xl bg-muted/50 hover:bg-muted transition-colors"
+                            >
+                              <div
+                                className="w-4 h-4 rounded-full flex-shrink-0"
+                                style={{ backgroundColor: theme.color || '#6366F1' }}
+                              />
+                              <div className="flex-1 min-w-0">
+                                <div className="font-medium">{theme.name}</div>
+                                <div className="text-xs text-muted-foreground">{theme.slug}</div>
+                              </div>
+                              <div className="flex items-center gap-1">
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => openThemeDialog(theme)}
+                                  className="rounded-lg"
+                                >
+                                  <Pencil className="w-4 h-4" />
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => handleDeleteTheme(theme)}
+                                  className="rounded-lg text-destructive hover:bg-destructive/10"
+                                >
+                                  <Trash2 className="w-4 h-4" />
+                                </Button>
+                              </div>
+                            </div>
+                          ))}
+                          {themes.length === 0 && (
+                            <div className="text-center py-8 text-muted-foreground">
+                              No themes yet. Click "Add" to create one.
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </CardContent>
+                  </Card>
+                </div>
               </TabsContent>
             </Tabs>
           </div>
@@ -815,29 +1401,101 @@ export default function AdminPage() {
               />
             </div>
 
-            {/* Thumbnail URL */}
+            {/* Thumbnail Upload */}
             <div className="grid gap-2">
-              <Label htmlFor="thumbnail">Thumbnail URL</Label>
-              <Input
-                id="thumbnail"
-                value={formData.thumbnail}
-                onChange={(e) => setFormData({ ...formData, thumbnail: e.target.value })}
-                placeholder="https://example.com/image.jpg"
-                className="rounded-xl"
-              />
+              <Label>Thumbnail</Label>
+              <div className="flex gap-3">
+                <div className="flex-1">
+                  <Input
+                    value={formData.thumbnail}
+                    onChange={(e) => setFormData({ ...formData, thumbnail: e.target.value })}
+                    placeholder="https://example.com/image.jpg or upload"
+                    className="rounded-xl"
+                  />
+                </div>
+                <div className="relative">
+                  <input
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp"
+                    onChange={handleThumbnailUpload}
+                    className="absolute inset-0 opacity-0 cursor-pointer"
+                    disabled={uploadingThumbnail}
+                  />
+                  <Button 
+                    type="button"
+                    variant="outline" 
+                    className="rounded-xl gap-2"
+                    disabled={uploadingThumbnail}
+                  >
+                    {uploadingThumbnail ? (
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                    ) : (
+                      <ImageIcon className="w-4 h-4" />
+                    )}
+                    Upload
+                  </Button>
+                </div>
+              </div>
+              {formData.thumbnail && (
+                <div className="mt-2 relative w-32 h-20 rounded-lg overflow-hidden bg-muted">
+                  <img src={formData.thumbnail} alt="Thumbnail preview" className="w-full h-full object-cover" />
+                </div>
+              )}
             </div>
 
-            {/* Video URL */}
+            {/* Video Upload */}
             {!isLiveSession && (
               <div className="grid gap-2">
-                <Label htmlFor="videoUrl">Video URL</Label>
-                <Input
-                  id="videoUrl"
-                  value={formData.videoUrl}
-                  onChange={(e) => setFormData({ ...formData, videoUrl: e.target.value })}
-                  placeholder="https://example.com/video.mp4"
-                  className="rounded-xl"
-                />
+                <Label>Video</Label>
+                <div className="flex gap-3">
+                  <div className="flex-1">
+                    <Input
+                      value={formData.videoUrl}
+                      onChange={(e) => setFormData({ ...formData, videoUrl: e.target.value })}
+                      placeholder="https://example.com/video.mp4 or upload"
+                      className="rounded-xl"
+                    />
+                  </div>
+                  <div className="relative">
+                    <input
+                      type="file"
+                      accept="video/mp4,video/webm,video/quicktime"
+                      onChange={handleVideoUpload}
+                      className="absolute inset-0 opacity-0 cursor-pointer"
+                      disabled={uploadingVideo}
+                    />
+                    <Button 
+                      type="button"
+                      variant="outline" 
+                      className="rounded-xl gap-2"
+                      disabled={uploadingVideo}
+                    >
+                      {uploadingVideo ? (
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                      ) : (
+                        <Upload className="w-4 h-4" />
+                      )}
+                      Upload
+                    </Button>
+                  </div>
+                </div>
+                {uploadingVideo && (
+                  <div className="mt-2">
+                    <div className="h-2 bg-muted rounded-full overflow-hidden">
+                      <div 
+                        className="h-full bg-primary transition-all duration-300"
+                        style={{ width: `${uploadProgress}%` }}
+                      />
+                    </div>
+                    <p className="text-xs text-muted-foreground mt-1">Uploading... {uploadProgress}%</p>
+                  </div>
+                )}
+                {formData.videoUrl && !uploadingVideo && (
+                  <p className="text-xs text-green-600 dark:text-green-400 mt-1 flex items-center gap-1">
+                    <Video className="w-3 h-3" />
+                    Video uploaded
+                  </p>
+                )}
               </div>
             )}
 
@@ -972,6 +1630,148 @@ export default function AdminPage() {
                   Save
                 </>
               )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Category Dialog */}
+      <Dialog open={categoryDialogOpen} onOpenChange={setCategoryDialogOpen}>
+        <DialogContent className="sm:max-w-md rounded-2xl">
+          <DialogHeader>
+            <DialogTitle>{editingCategory ? 'Edit' : 'Add'} Category</DialogTitle>
+            <DialogDescription>
+              {editingCategory ? 'Update the category details.' : 'Create a new category for your classes.'}
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="grid gap-4 py-4">
+            <div className="grid gap-2">
+              <Label htmlFor="categoryName">Name *</Label>
+              <Input
+                id="categoryName"
+                value={categoryForm.name}
+                onChange={(e) => {
+                  const name = e.target.value;
+                  setCategoryForm({ 
+                    ...categoryForm, 
+                    name,
+                    slug: editingCategory ? categoryForm.slug : generateSlug(name)
+                  });
+                }}
+                placeholder="e.g., Vinyasa"
+                className="rounded-xl"
+              />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="categorySlug">Slug *</Label>
+              <Input
+                id="categorySlug"
+                value={categoryForm.slug}
+                onChange={(e) => setCategoryForm({ ...categoryForm, slug: e.target.value })}
+                placeholder="e.g., vinyasa"
+                className="rounded-xl"
+              />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="categoryDescription">Description</Label>
+              <Textarea
+                id="categoryDescription"
+                value={categoryForm.description}
+                onChange={(e) => setCategoryForm({ ...categoryForm, description: e.target.value })}
+                placeholder="Brief description of this category"
+                className="rounded-xl"
+              />
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setCategoryDialogOpen(false)} className="rounded-xl">
+              Cancel
+            </Button>
+            <Button onClick={handleSaveCategory} disabled={saving} className="rounded-xl">
+              {saving ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}
+              {editingCategory ? 'Update' : 'Create'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Theme Dialog */}
+      <Dialog open={themeDialogOpen} onOpenChange={setThemeDialogOpen}>
+        <DialogContent className="sm:max-w-md rounded-2xl">
+          <DialogHeader>
+            <DialogTitle>{editingTheme ? 'Edit' : 'Add'} Theme</DialogTitle>
+            <DialogDescription>
+              {editingTheme ? 'Update the theme details.' : 'Create a new theme for your classes.'}
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="grid gap-4 py-4">
+            <div className="grid gap-2">
+              <Label htmlFor="themeName">Name *</Label>
+              <Input
+                id="themeName"
+                value={themeForm.name}
+                onChange={(e) => {
+                  const name = e.target.value;
+                  setThemeForm({ 
+                    ...themeForm, 
+                    name,
+                    slug: editingTheme ? themeForm.slug : generateSlug(name)
+                  });
+                }}
+                placeholder="e.g., Morning Energy"
+                className="rounded-xl"
+              />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="themeSlug">Slug *</Label>
+              <Input
+                id="themeSlug"
+                value={themeForm.slug}
+                onChange={(e) => setThemeForm({ ...themeForm, slug: e.target.value })}
+                placeholder="e.g., morning-energy"
+                className="rounded-xl"
+              />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="themeDescription">Description</Label>
+              <Textarea
+                id="themeDescription"
+                value={themeForm.description}
+                onChange={(e) => setThemeForm({ ...themeForm, description: e.target.value })}
+                placeholder="Brief description of this theme"
+                className="rounded-xl"
+              />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="themeColor">Color</Label>
+              <div className="flex gap-3 items-center">
+                <input
+                  type="color"
+                  id="themeColor"
+                  value={themeForm.color}
+                  onChange={(e) => setThemeForm({ ...themeForm, color: e.target.value })}
+                  className="w-10 h-10 rounded-lg cursor-pointer border-0"
+                />
+                <Input
+                  value={themeForm.color}
+                  onChange={(e) => setThemeForm({ ...themeForm, color: e.target.value })}
+                  placeholder="#6366F1"
+                  className="rounded-xl flex-1"
+                />
+              </div>
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setThemeDialogOpen(false)} className="rounded-xl">
+              Cancel
+            </Button>
+            <Button onClick={handleSaveTheme} disabled={saving} className="rounded-xl">
+              {saving ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}
+              {editingTheme ? 'Update' : 'Create'}
             </Button>
           </DialogFooter>
         </DialogContent>

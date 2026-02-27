@@ -32,6 +32,7 @@ interface LiveSession {
   liveAt: string;
   thumbnail: string | null;
   isLive: boolean;
+  streamingNow: boolean;
   duration: number;
 }
 
@@ -58,9 +59,9 @@ export default function Home() {
         const liveRes = await fetch('/api/sessions/live');
         if (liveRes.ok) {
           const data = await liveRes.json();
-          // Get only upcoming sessions (next 3)
+          // Get upcoming sessions OR sessions currently streaming
           const upcoming = (data.sessions || [])
-            .filter((s: LiveSession) => new Date(s.liveAt) >= new Date())
+            .filter((s: LiveSession) => s.streamingNow || new Date(s.liveAt) >= new Date())
             .slice(0, 3);
           setLiveSessions(upcoming);
         }
@@ -86,13 +87,22 @@ export default function Home() {
           <div className="container mx-auto px-4">
             <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 mb-8">
               <div>
-                <Badge variant="secondary" className="mb-3 px-3 py-1 rounded-full gap-1.5">
-                  <RadioTower className="w-3.5 h-3.5" />
-                  Live Now
-                </Badge>
+                {liveSessions.some(s => s.streamingNow) ? (
+                  <Badge className="mb-3 px-3 py-1 rounded-full gap-1.5 bg-red-500 text-white animate-pulse">
+                    <RadioTower className="w-3.5 h-3.5" />
+                    Live Now
+                  </Badge>
+                ) : (
+                  <Badge variant="secondary" className="mb-3 px-3 py-1 rounded-full gap-1.5">
+                    <Calendar className="w-3.5 h-3.5" />
+                    Upcoming
+                  </Badge>
+                )}
                 <h2 className="text-2xl md:text-3xl font-bold">Live Sessions</h2>
                 <p className="text-muted-foreground mt-2">
-                  Join our instructors for real-time yoga sessions
+                  {liveSessions.some(s => s.streamingNow)
+                    ? 'Join a live session in progress now!'
+                    : 'Join our instructors for real-time yoga sessions'}
                 </p>
               </div>
               <Link href="/calendar">
@@ -121,6 +131,7 @@ export default function Home() {
                       scheduledAt: session.liveAt,
                       thumbnail: session.thumbnail,
                       isLive: session.isLive,
+                      streamingNow: session.streamingNow,
                       viewerCount: session.isLive ? Math.floor(Math.random() * 200) + 50 : undefined,
                     }} 
                   />
