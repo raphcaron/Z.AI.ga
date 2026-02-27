@@ -117,6 +117,7 @@ export default function AdminPage() {
   const [themes, setThemes] = useState<Theme[]>([]);
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
+  const [usersLoading, setUsersLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   
@@ -188,6 +189,10 @@ export default function AdminPage() {
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'visible' && user) {
         fetchData();
+        // Also reload users if they were previously loaded
+        if (users.length > 0) {
+          loadUsers();
+        }
       }
     };
 
@@ -195,7 +200,7 @@ export default function AdminPage() {
     return () => {
       document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
-  }, [user]);
+  }, [user, users.length]);
 
   const fetchData = async () => {
     console.log('📊 Admin fetchData called');
@@ -257,22 +262,25 @@ export default function AdminPage() {
   };
 
   const loadUsers = async () => {
+    setUsersLoading(true);
     try {
       const { data: { session } } = await supabase.auth.getSession();
-      
+
       const response = await fetch('/api/users', {
         headers: {
           'Authorization': `Bearer ${session?.access_token || ''}`,
         },
       });
-      
+
       const result = await response.json();
-      
+
       if (response.ok) {
         setUsers(result.users || []);
       }
     } catch (error) {
       console.error('Error loading users:', error);
+    } finally {
+      setUsersLoading(false);
     }
   };
 
@@ -1142,7 +1150,11 @@ export default function AdminPage() {
               </div>
             )}
 
-            <Tabs defaultValue="videos" className="w-full">
+            <Tabs defaultValue="videos" className="w-full" onValueChange={(value) => {
+              if (value === 'users' && users.length === 0) {
+                loadUsers();
+              }
+            }}>
               <TabsList className="grid w-full grid-cols-3 rounded-full mb-8 h-auto p-1.5 bg-muted">
                 <TabsTrigger value="videos" className="rounded-full gap-2 py-3 px-4 data-[state=active]:bg-background data-[state=active]:shadow-sm">
                   <Video className="w-5 h-5" />
@@ -1152,7 +1164,7 @@ export default function AdminPage() {
                   <RadioTower className="w-5 h-5" />
                   Live Sessions
                 </TabsTrigger>
-                <TabsTrigger value="users" className="rounded-full gap-2 py-3 px-4 data-[state=active]:bg-background data-[state=active]:shadow-sm" onClick={loadUsers}>
+                <TabsTrigger value="users" className="rounded-full gap-2 py-3 px-4 data-[state=active]:bg-background data-[state=active]:shadow-sm">
                   <Users className="w-5 h-5" />
                   Users
                 </TabsTrigger>
@@ -1558,14 +1570,14 @@ export default function AdminPage() {
                     <CardDescription>Manage user accounts and permissions</CardDescription>
                   </CardHeader>
                   <CardContent>
-                    {loading ? (
+                    {usersLoading ? (
                       <div className="flex items-center justify-center py-8">
                         <Loader2 className="w-6 h-6 animate-spin text-primary" />
                       </div>
                     ) : users.length === 0 ? (
                       <div className="text-center py-12 text-muted-foreground">
                         <Users className="w-12 h-12 mx-auto mb-4 opacity-30" />
-                        <p>No users found. Click the tab to load users.</p>
+                        <p>No users found. Click the button to load users.</p>
                         <Button onClick={loadUsers} variant="outline" className="mt-4 rounded-xl">
                           Load Users
                         </Button>
