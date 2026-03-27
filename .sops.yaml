@@ -1,0 +1,11 @@
+keys:
+  - &team_placeholder age1wngatqc90vxrzsfxj93m022ts4vl99azvas9mlm25thj743zj94spd27ep
+
+creation_rules:
+  - path_regex: \.env
+    key_groups:
+      - age:
+          - *team_placeholder
+
+# Decrypt: sops -d --output-type dotenv .env.enc > .env
+# Requires: export SOPS_AGE_KEY_FILE=~/.config/sops/age/keys.txt
