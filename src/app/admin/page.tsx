@@ -89,6 +89,8 @@ export default function AdminPage() {
   const [editingSession, setEditingSession] = useState<Session | null>(null);
   const [isLiveSession, setIsLiveSession] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
   const [videoSearch, setVideoSearch] = useState('');
   const [formData, setFormData] = useState({
     title: '', description: '', thumbnail: '', videoUrl: '',
@@ -256,6 +258,51 @@ export default function AdminPage() {
     } catch (err) {
       console.error('Error toggling streaming:', err);
       setMessage({ type: 'error', text: 'Failed to update streaming status' });
+    }
+  };
+
+  const handleThumbnailUpload = async (file: File) => {
+    const allowedTypes = ['image/jpeg', 'image/jpg', 'image/webp'];
+    if (!allowedTypes.includes(file.type)) {
+      setMessage({ type: 'error', text: 'Only JPG, JPEG, and WebP files are allowed' });
+      return;
+    }
+
+    if (file.size > 5 * 1024 * 1024) {
+      setMessage({ type: 'error', text: 'File must be under 5MB' });
+      return;
+    }
+
+    setUploading(true);
+    setUploadProgress(0);
+
+    try {
+      const slug = generateSlug(formData.title) || 'untitled';
+      const body = new FormData();
+      body.append('file', file);
+      body.append('slug', slug);
+
+      setUploadProgress(30);
+
+      const res = await fetch('/api/upload', { method: 'POST', body });
+      const data = await res.json();
+
+      setUploadProgress(100);
+
+      if (!res.ok) {
+        throw new Error(data.error || 'Upload failed');
+      }
+
+      setFormData(prev => ({ ...prev, thumbnail: data.url }));
+      setMessage({ type: 'success', text: 'Thumbnail uploaded!' });
+    } catch (err) {
+      console.error('Upload error:', err);
+      setMessage({ type: 'error', text: err instanceof Error ? err.message : 'Upload failed' });
+    } finally {
+      setTimeout(() => {
+        setUploading(false);
+        setUploadProgress(0);
+      }, 300);
     }
   };
 
@@ -580,8 +627,44 @@ export default function AdminPage() {
               </div>
 
               <div className="grid gap-2">
-                <Label>Thumbnail URL</Label>
-                <Input value={formData.thumbnail} onChange={(e) => setFormData({ ...formData, thumbnail: e.target.value })} placeholder="https://example.com/image.jpg" className="rounded-xl" />
+                <Label>Thumbnail</Label>
+                <div className="flex gap-3">
+                  <Input
+                    value={formData.thumbnail}
+                    onChange={(e) => setFormData({ ...formData, thumbnail: e.target.value })}
+                    placeholder="https://example.com/image.jpg or upload"
+                    className="rounded-xl flex-1"
+                  />
+                  <div className="relative">
+                    <input
+                      type="file"
+                      accept=".jpg,.jpeg,.webp,image/jpeg,image/webp"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (file) handleThumbnailUpload(file);
+                      }}
+                      className="absolute inset-0 opacity-0 cursor-pointer"
+                      disabled={uploading}
+                    />
+                    <Button type="button" variant="outline" className="rounded-xl gap-2" disabled={uploading}>
+                      {uploading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
+                      Upload
+                    </Button>
+                  </div>
+                </div>
+                {uploading && (
+                  <div className="mt-2">
+                    <div className="h-2 bg-muted rounded-full overflow-hidden">
+                      <div className="h-full bg-primary transition-all duration-300" style={{ width: `${uploadProgress}%` }} />
+                    </div>
+                    <p className="text-xs text-muted-foreground mt-1">Uploading... {uploadProgress}%</p>
+                  </div>
+                )}
+                {formData.thumbnail && !uploading && (
+                  <div className="mt-2 relative w-32 h-20 rounded-lg overflow-hidden bg-muted">
+                    <img src={formData.thumbnail} alt="Thumbnail preview" className="w-full h-full object-cover" />
+                  </div>
+                )}
               </div>
 
               {!isLiveSession && (
