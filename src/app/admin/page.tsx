@@ -91,6 +91,8 @@ export default function AdminPage() {
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
+  const [uploadingVideo, setUploadingVideo] = useState(false);
+  const [videoUploadProgress, setVideoUploadProgress] = useState(0);
   const [videoSearch, setVideoSearch] = useState('');
   const [formData, setFormData] = useState({
     title: '', description: '', thumbnail: '', videoUrl: '',
@@ -281,6 +283,7 @@ export default function AdminPage() {
       const body = new FormData();
       body.append('file', file);
       body.append('slug', slug);
+      body.append('type', 'thumbnail');
 
       setUploadProgress(30);
 
@@ -302,6 +305,52 @@ export default function AdminPage() {
       setTimeout(() => {
         setUploading(false);
         setUploadProgress(0);
+      }, 300);
+    }
+  };
+
+  const handleVideoUpload = async (file: File) => {
+    const allowedTypes = ['video/mp4', 'video/webm', 'video/quicktime'];
+    if (!allowedTypes.includes(file.type)) {
+      setMessage({ type: 'error', text: 'Only MP4, WebM, and MOV files are allowed' });
+      return;
+    }
+
+    if (file.size > 500 * 1024 * 1024) {
+      setMessage({ type: 'error', text: 'Video must be under 500MB' });
+      return;
+    }
+
+    setUploadingVideo(true);
+    setVideoUploadProgress(0);
+
+    try {
+      const slug = generateSlug(formData.title) || 'untitled';
+      const body = new FormData();
+      body.append('file', file);
+      body.append('slug', slug);
+      body.append('type', 'video');
+
+      setVideoUploadProgress(10);
+
+      const res = await fetch('/api/upload', { method: 'POST', body });
+      const data = await res.json();
+
+      setVideoUploadProgress(100);
+
+      if (!res.ok) {
+        throw new Error(data.error || 'Upload failed');
+      }
+
+      setFormData(prev => ({ ...prev, videoUrl: data.url }));
+      setMessage({ type: 'success', text: 'Video uploaded!' });
+    } catch (err) {
+      console.error('Video upload error:', err);
+      setMessage({ type: 'error', text: err instanceof Error ? err.message : 'Video upload failed' });
+    } finally {
+      setTimeout(() => {
+        setUploadingVideo(false);
+        setVideoUploadProgress(0);
       }, 300);
     }
   };
@@ -669,8 +718,45 @@ export default function AdminPage() {
 
               {!isLiveSession && (
                 <div className="grid gap-2">
-                  <Label>Video URL</Label>
-                  <Input value={formData.videoUrl} onChange={(e) => setFormData({ ...formData, videoUrl: e.target.value })} placeholder="https://example.com/video.mp4" className="rounded-xl" />
+                  <Label>Video</Label>
+                  <div className="flex gap-3">
+                    <Input
+                      value={formData.videoUrl}
+                      onChange={(e) => setFormData({ ...formData, videoUrl: e.target.value })}
+                      placeholder="https://example.com/video.mp4 or upload"
+                      className="rounded-xl flex-1"
+                    />
+                    <div className="relative">
+                      <input
+                        type="file"
+                        accept=".mp4,.webm,.mov,video/mp4,video/webm,video/quicktime"
+                        onChange={(e) => {
+                          const file = e.target.files?.[0];
+                          if (file) handleVideoUpload(file);
+                        }}
+                        className="absolute inset-0 opacity-0 cursor-pointer"
+                        disabled={uploadingVideo}
+                      />
+                      <Button type="button" variant="outline" className="rounded-xl gap-2" disabled={uploadingVideo}>
+                        {uploadingVideo ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
+                        Upload
+                      </Button>
+                    </div>
+                  </div>
+                  {uploadingVideo && (
+                    <div className="mt-2">
+                      <div className="h-2 bg-muted rounded-full overflow-hidden">
+                        <div className="h-full bg-primary transition-all duration-300" style={{ width: `${videoUploadProgress}%` }} />
+                      </div>
+                      <p className="text-xs text-muted-foreground mt-1">Uploading video... {videoUploadProgress}%</p>
+                    </div>
+                  )}
+                  {formData.videoUrl && !uploadingVideo && (
+                    <p className="text-xs text-green-600 dark:text-green-400 mt-1 flex items-center gap-1">
+                      <Video className="w-3 h-3" />
+                      Video uploaded
+                    </p>
+                  )}
                 </div>
               )}
 
