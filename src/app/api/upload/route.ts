@@ -16,6 +16,12 @@ const THUMBNAILS_BUCKET = process.env.CLOUDFLARE_R2_THUMBNAILS_BUCKET || 'yoga-t
 const VIDEOS_URL = process.env.CLOUDFLARE_R2_VIDEOS_URL || '';
 const THUMBNAILS_URL = process.env.CLOUDFLARE_R2_THUMBNAILS_URL || '';
 
+export const config = {
+  api: {
+    bodyParser: false,
+  },
+};
+
 export async function POST(request: Request) {
   try {
     const formData = await request.formData();
@@ -34,7 +40,7 @@ export async function POST(request: Request) {
 
     if (type === 'video') {
       allowedTypes = ['video/mp4', 'video/webm', 'video/quicktime'];
-      maxSize = 500 * 1024 * 1024; // 500MB
+      maxSize = 3 * 1024 * 1024 * 1024; // 3GB
       bucket = VIDEOS_BUCKET;
       baseUrl = VIDEOS_URL;
     } else {

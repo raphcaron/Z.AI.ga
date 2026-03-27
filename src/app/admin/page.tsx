@@ -316,8 +316,8 @@ export default function AdminPage() {
       return;
     }
 
-    if (file.size > 500 * 1024 * 1024) {
-      setMessage({ type: 'error', text: 'Video must be under 500MB' });
+    if (file.size > 3 * 1024 * 1024 * 1024) {
+      setMessage({ type: 'error', text: 'Video must be under 3GB' });
       return;
     }
 
