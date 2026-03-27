@@ -372,21 +372,62 @@ function SettingsContent() {
                       </div>
                     )}
 
+                      <Button
+                        type="submit"
+                        className="rounded-xl bg-primary hover:bg-primary/90"
+                        disabled={loading}
+                      >
+                        {loading ? (
+                          <>
+                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                            Saving...
+                          </>
+                        ) : (
+                          'Save Changes'
+                        )}
+                      </Button>
+                    </form>
+                </CardContent>
+              </Card>
+
+              {/* Debug Tools */}
+              <Card className="rounded-3xl mt-6">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Shield className="w-5 h-5" />
+                    Debug Tools
+                  </CardTitle>
+                  <CardDescription>
+                    Development utilities
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="flex flex-wrap gap-3">
                     <Button
-                      type="submit"
-                      className="rounded-xl bg-primary hover:bg-primary/90"
-                      disabled={loading}
+                      variant="outline"
+                      className="rounded-xl"
+                      onClick={async () => {
+                        if (!user) return;
+                        try {
+                          const { error } = await supabase
+                            .from('subscriptions')
+                            .upsert({
+                              user_id: user.id,
+                              status: 'active',
+                              stripe_price_id: 'debug_monthly',
+                              current_period_end: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString(),
+                            });
+                          if (error) throw error;
+                          window.location.reload();
+                        } catch (err) {
+                          console.error('Failed to grant subscription:', err);
+                        }
+                      }}
                     >
-                      {loading ? (
-                        <>
-                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                          Saving...
-                        </>
-                      ) : (
-                        'Save Changes'
-                      )}
+                      <Crown className="w-4 h-4 mr-2" />
+                      Grant Active Subscription
                     </Button>
-                  </form>
+                  </div>
                 </CardContent>
               </Card>
             </TabsContent>

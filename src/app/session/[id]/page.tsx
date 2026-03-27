@@ -29,7 +29,8 @@ import {
   ChevronLeft,
   ChevronRight,
   Lock,
-  Crown
+  Crown,
+  Pencil
 } from 'lucide-react';
 import { format } from 'date-fns';
 
@@ -62,7 +63,7 @@ interface RelatedSession {
 export default function SessionPage() {
   const params = useParams();
   const router = useRouter();
-  const { user, isSubscribed } = useAuth();
+  const { user, isSubscribed, isAdmin } = useAuth();
   const { isFavorite, toggleFavorite } = useFavorites();
   
   const [session, setSession] = useState<Session | null>(null);
@@ -369,6 +370,13 @@ export default function SessionPage() {
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
+                  {isAdmin && (
+                    <Link href={`/admin?edit=${session.id}`}>
+                      <Button variant="outline" size="icon" className="rounded-full">
+                        <Pencil className="w-5 h-5" />
+                      </Button>
+                    </Link>
+                  )}
                   <Button
                     variant="outline"
                     size="icon"

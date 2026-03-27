@@ -25,7 +25,8 @@ import {
   Sparkles,
   LogOut,
   Settings,
-  Crown
+  Crown,
+  Shield
 } from 'lucide-react';
 
 const navLinks = [
@@ -37,7 +38,7 @@ const navLinks = [
 export function Navigation() {
   const [isOpen, setIsOpen] = useState(false);
   const [authModalOpen, setAuthModalOpen] = useState(false);
-  const { user, signOut, isSubscribed } = useAuth();
+  const { user, signOut, isSubscribed, isAdmin } = useAuth();
   const { favorites } = useFavorites();
 
   const handleSignOut = async () => {
@@ -143,6 +144,14 @@ export function Navigation() {
                         Subscription
                       </Link>
                     </DropdownMenuItem>
+                    {isAdmin && (
+                      <DropdownMenuItem className="gap-2 rounded-lg cursor-pointer" asChild>
+                        <Link href="/admin">
+                          <Shield className="h-4 w-4" />
+                          Admin Dashboard
+                        </Link>
+                      </DropdownMenuItem>
+                    )}
                     <DropdownMenuSeparator />
                     <DropdownMenuItem className="gap-2 rounded-lg text-red-600 cursor-pointer" onClick={handleSignOut}>
                       <LogOut className="h-4 w-4" />
@@ -232,6 +241,17 @@ export function Navigation() {
                           )}
                         </Button>
                       </Link>
+                      {isAdmin && (
+                        <Link href="/admin" onClick={() => setIsOpen(false)}>
+                          <Button 
+                            variant="outline" 
+                            className="w-full justify-start gap-2 rounded-xl"
+                          >
+                            <Shield className="h-4 w-4" />
+                            Admin Dashboard
+                          </Button>
+                        </Link>
+                      )}
                       <Button variant="outline" className="w-full justify-start gap-2 rounded-xl text-red-600" onClick={handleSignOut}>
                         <LogOut className="h-4 w-4" />
                         Sign Out

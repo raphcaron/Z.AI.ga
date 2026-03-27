@@ -11,6 +11,7 @@ interface AuthContextType {
   signUp: (email: string, password: string, name?: string) => Promise<{ error: Error | null }>;
   signOut: () => Promise<void>;
   isSubscribed: boolean;
+  isAdmin: boolean;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -19,70 +20,45 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const [isSubscribed, setIsSubscribed] = useState(false);
+  const [isAdmin, setIsAdmin] = useState(false);
 
   useEffect(() => {
     let mounted = true;
 
-    // Get initial session
-    const getInitialSession = async () => {
-      try {
-        console.log('Getting initial session...');
-        
-        const { data: { session } } = await supabase.auth.getSession();
-
-        if (!mounted) return;
-        
-        console.log('Session loaded:', session ? 'User found' : 'No user');
-        setUser(session?.user ?? null);
-        
-        // Check subscription if user exists
-        if (session?.user) {
-          try {
-            const { data } = await supabase
-              .from('subscriptions')
-              .select('status')
-              .eq('user_id', session.user.id)
-              .eq('status', 'active')
-              .single();
-            if (mounted) setIsSubscribed(!!data);
-          } catch {
-            if (mounted) setIsSubscribed(false);
-          }
-        }
-      } catch (error) {
-        console.error('Error getting session:', error);
-        if (mounted) setUser(null);
-      } finally {
-        if (mounted) setLoading(false);
-      }
-    };
-
-    getInitialSession();
-
-    // Listen for auth changes
+    // Use ONLY onAuthStateChange — it fires INITIAL_SESSION on mount
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
       if (!mounted) return;
-      
-      console.log('Auth state changed:', _event, session ? 'User present' : 'No user');
-      setUser(session?.user ?? null);
-      
+
       if (session?.user) {
+        setUser(session.user);
+        setLoading(false);
+
+        // Fetch profile data in background, don't block UI
         try {
-          const { data } = await supabase
+          const { data: profile, error: profileError } = await supabase
+            .from('profiles')
+            .select('is_admin')
+            .eq('id', session.user.id)
+            .single();
+          if (profileError) console.error('Profile query error:', profileError);
+          if (mounted) setIsAdmin(profile?.is_admin === true);
+        } catch (err) { console.error('Profile query failed:', err); }
+
+        try {
+          const { data: sub } = await supabase
             .from('subscriptions')
             .select('status')
             .eq('user_id', session.user.id)
             .eq('status', 'active')
             .single();
-          if (mounted) setIsSubscribed(!!data);
-        } catch {
-          if (mounted) setIsSubscribed(false);
-        }
+          if (mounted) setIsSubscribed(!!sub);
+        } catch (err) { console.error('Subscription query failed:', err); }
       } else {
-        if (mounted) setIsSubscribed(false);
+        setUser(null);
+        setIsAdmin(false);
+        setIsSubscribed(false);
+        setLoading(false);
       }
-      
-      if (mounted) setLoading(false);
     });
 
     return () => {
@@ -92,39 +68,28 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const signIn = async (email: string, password: string) => {
-    console.log('Signing in...');
-    const { error } = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    });
-    if (error) console.error('Sign in error:', error);
+    const { error } = await supabase.auth.signInWithPassword({ email, password });
     return { error };
   };
 
   const signUp = async (email: string, password: string, name?: string) => {
-    console.log('Signing up...');
     const { error } = await supabase.auth.signUp({
       email,
       password,
-      options: {
-        data: {
-          name,
-        },
-      },
+      options: { data: { name } },
     });
-    if (error) console.error('Sign up error:', error);
     return { error };
   };
 
   const signOut = async () => {
-    console.log('Signing out...');
     await supabase.auth.signOut();
     setUser(null);
     setIsSubscribed(false);
+    setIsAdmin(false);
   };
 
   return (
-    <AuthContext.Provider value={{ user, loading, signIn, signUp, signOut, isSubscribed }}>
+    <AuthContext.Provider value={{ user, loading, signIn, signUp, signOut, isSubscribed, isAdmin }}>
       {children}
     </AuthContext.Provider>
   );
