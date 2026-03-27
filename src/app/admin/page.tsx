@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Navigation } from '@/components/yoga/navigation';
@@ -94,6 +94,8 @@ export default function AdminPage() {
   const [uploadingVideo, setUploadingVideo] = useState(false);
   const [videoUploadProgress, setVideoUploadProgress] = useState(0);
   const [videoSearch, setVideoSearch] = useState('');
+  const thumbnailXhrRef = useRef<XMLHttpRequest | null>(null);
+  const videoXhrRef = useRef<XMLHttpRequest | null>(null);
   const [formData, setFormData] = useState({
     title: '', description: '', thumbnail: '', videoUrl: '',
     duration: 45, difficulty: 'beginner', instructor: '',
@@ -278,35 +280,59 @@ export default function AdminPage() {
     setUploading(true);
     setUploadProgress(0);
 
-    try {
-      const slug = generateSlug(formData.title) || 'untitled';
-      const body = new FormData();
-      body.append('file', file);
-      body.append('slug', slug);
-      body.append('type', 'thumbnail');
+    const slug = generateSlug(formData.title) || 'untitled';
+    const body = new FormData();
+    body.append('file', file);
+    body.append('slug', slug);
+    body.append('type', 'thumbnail');
 
-      setUploadProgress(30);
+    return new Promise<void>((resolve) => {
+      const xhr = new XMLHttpRequest();
+      thumbnailXhrRef.current = xhr;
 
-      const res = await fetch('/api/upload', { method: 'POST', body });
-      const data = await res.json();
+      xhr.upload.addEventListener('progress', (e) => {
+        if (e.lengthComputable) {
+          const pct = Math.round((e.loaded / e.total) * 100);
+          setUploadProgress(pct);
+        }
+      });
 
-      setUploadProgress(100);
-
-      if (!res.ok) {
-        throw new Error(data.error || 'Upload failed');
-      }
-
-      setFormData(prev => ({ ...prev, thumbnail: data.url }));
-      setMessage({ type: 'success', text: 'Thumbnail uploaded!' });
-    } catch (err) {
-      console.error('Upload error:', err);
-      setMessage({ type: 'error', text: err instanceof Error ? err.message : 'Upload failed' });
-    } finally {
-      setTimeout(() => {
+      xhr.addEventListener('load', () => {
+        try {
+          const data = JSON.parse(xhr.responseText);
+          if (xhr.status >= 200 && xhr.status < 300) {
+            setFormData(prev => ({ ...prev, thumbnail: data.url }));
+            setMessage({ type: 'success', text: 'Thumbnail uploaded!' });
+          } else {
+            setMessage({ type: 'error', text: data.error || 'Upload failed' });
+          }
+        } catch {
+          setMessage({ type: 'error', text: 'Upload failed' });
+        }
         setUploading(false);
         setUploadProgress(0);
-      }, 300);
-    }
+        thumbnailXhrRef.current = null;
+        resolve();
+      });
+
+      xhr.addEventListener('error', () => {
+        setMessage({ type: 'error', text: 'Upload failed' });
+        setUploading(false);
+        setUploadProgress(0);
+        thumbnailXhrRef.current = null;
+        resolve();
+      });
+
+      xhr.addEventListener('abort', () => {
+        setUploading(false);
+        setUploadProgress(0);
+        thumbnailXhrRef.current = null;
+        resolve();
+      });
+
+      xhr.open('POST', '/api/upload');
+      xhr.send(body);
+    });
   };
 
   const handleVideoUpload = async (file: File) => {
@@ -324,35 +350,59 @@ export default function AdminPage() {
     setUploadingVideo(true);
     setVideoUploadProgress(0);
 
-    try {
-      const slug = generateSlug(formData.title) || 'untitled';
-      const body = new FormData();
-      body.append('file', file);
-      body.append('slug', slug);
-      body.append('type', 'video');
+    const slug = generateSlug(formData.title) || 'untitled';
+    const body = new FormData();
+    body.append('file', file);
+    body.append('slug', slug);
+    body.append('type', 'video');
 
-      setVideoUploadProgress(10);
+    return new Promise<void>((resolve) => {
+      const xhr = new XMLHttpRequest();
+      videoXhrRef.current = xhr;
 
-      const res = await fetch('/api/upload', { method: 'POST', body });
-      const data = await res.json();
+      xhr.upload.addEventListener('progress', (e) => {
+        if (e.lengthComputable) {
+          const pct = Math.round((e.loaded / e.total) * 100);
+          setVideoUploadProgress(pct);
+        }
+      });
 
-      setVideoUploadProgress(100);
-
-      if (!res.ok) {
-        throw new Error(data.error || 'Upload failed');
-      }
-
-      setFormData(prev => ({ ...prev, videoUrl: data.url }));
-      setMessage({ type: 'success', text: 'Video uploaded!' });
-    } catch (err) {
-      console.error('Video upload error:', err);
-      setMessage({ type: 'error', text: err instanceof Error ? err.message : 'Video upload failed' });
-    } finally {
-      setTimeout(() => {
+      xhr.addEventListener('load', () => {
+        try {
+          const data = JSON.parse(xhr.responseText);
+          if (xhr.status >= 200 && xhr.status < 300) {
+            setFormData(prev => ({ ...prev, videoUrl: data.url }));
+            setMessage({ type: 'success', text: 'Video uploaded!' });
+          } else {
+            setMessage({ type: 'error', text: data.error || 'Upload failed' });
+          }
+        } catch {
+          setMessage({ type: 'error', text: 'Upload failed' });
+        }
         setUploadingVideo(false);
         setVideoUploadProgress(0);
-      }, 300);
-    }
+        videoXhrRef.current = null;
+        resolve();
+      });
+
+      xhr.addEventListener('error', () => {
+        setMessage({ type: 'error', text: 'Video upload failed' });
+        setUploadingVideo(false);
+        setVideoUploadProgress(0);
+        videoXhrRef.current = null;
+        resolve();
+      });
+
+      xhr.addEventListener('abort', () => {
+        setUploadingVideo(false);
+        setVideoUploadProgress(0);
+        videoXhrRef.current = null;
+        resolve();
+      });
+
+      xhr.open('POST', '/api/upload');
+      xhr.send(body);
+    });
   };
 
   const filteredVideos = sessions.filter(s => !s.live_at).filter(s =>
@@ -702,11 +752,22 @@ export default function AdminPage() {
                   </div>
                 </div>
                 {uploading && (
-                  <div className="mt-2">
-                    <div className="h-2 bg-muted rounded-full overflow-hidden">
-                      <div className="h-full bg-primary transition-all duration-300" style={{ width: `${uploadProgress}%` }} />
+                  <div className="mt-2 flex items-center gap-3">
+                    <div className="flex-1">
+                      <div className="h-2 bg-muted rounded-full overflow-hidden">
+                        <div className="h-full bg-primary transition-all duration-300" style={{ width: `${uploadProgress}%` }} />
+                      </div>
+                      <p className="text-xs text-muted-foreground mt-1">Uploading thumbnail... {uploadProgress}%</p>
                     </div>
-                    <p className="text-xs text-muted-foreground mt-1">Uploading... {uploadProgress}%</p>
+                    <Button
+                      type="button"
+                      variant="destructive"
+                      size="icon"
+                      className="h-8 w-8 rounded-full flex-shrink-0"
+                      onClick={() => thumbnailXhrRef.current?.abort()}
+                    >
+                      <X className="w-4 h-4" />
+                    </Button>
                   </div>
                 )}
                 {formData.thumbnail && !uploading && (
@@ -744,11 +805,22 @@ export default function AdminPage() {
                     </div>
                   </div>
                   {uploadingVideo && (
-                    <div className="mt-2">
-                      <div className="h-2 bg-muted rounded-full overflow-hidden">
-                        <div className="h-full bg-primary transition-all duration-300" style={{ width: `${videoUploadProgress}%` }} />
+                    <div className="mt-2 flex items-center gap-3">
+                      <div className="flex-1">
+                        <div className="h-2 bg-muted rounded-full overflow-hidden">
+                          <div className="h-full bg-primary transition-all duration-300" style={{ width: `${videoUploadProgress}%` }} />
+                        </div>
+                        <p className="text-xs text-muted-foreground mt-1">Uploading video... {videoUploadProgress}%</p>
                       </div>
-                      <p className="text-xs text-muted-foreground mt-1">Uploading video... {videoUploadProgress}%</p>
+                      <Button
+                        type="button"
+                        variant="destructive"
+                        size="icon"
+                        className="h-8 w-8 rounded-full flex-shrink-0"
+                        onClick={() => videoXhrRef.current?.abort()}
+                      >
+                        <X className="w-4 h-4" />
+                      </Button>
                     </div>
                   )}
                   {formData.videoUrl && !uploadingVideo && (
