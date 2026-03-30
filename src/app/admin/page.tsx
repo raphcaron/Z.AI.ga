@@ -34,7 +34,7 @@ import { supabase } from '@/lib/supabase';
 import {
   Loader2, Video, RadioTower, Plus, Pencil, Trash2, Shield,
   Clock, User, Save, X, Search, Globe, Eye, Upload, Image as ImageIcon,
-  Calendar, Circle, AlertCircle,
+  Calendar, Circle, AlertCircle, Users, ShieldCheck, Crown, Mail, Phone,
 } from 'lucide-react';
 import { format } from 'date-fns';
 
@@ -72,6 +72,20 @@ interface Theme {
   color: string | null;
 }
 
+interface AdminUser {
+  id: string;
+  email: string;
+  displayName: string;
+  avatarUrl: string | null;
+  phone: string | null;
+  provider: string;
+  createdAt: string;
+  lastSignInAt: string | null;
+  isAdmin: boolean;
+  subscriptionStatus: string | null;
+  subscriptionEnd: string | null;
+}
+
 function generateSlug(name: string) {
   return name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
 }
@@ -96,6 +110,10 @@ export default function AdminPage() {
   const [videoSearch, setVideoSearch] = useState('');
   const thumbnailXhrRef = useRef<XMLHttpRequest | null>(null);
   const videoXhrRef = useRef<XMLHttpRequest | null>(null);
+  const [adminUsers, setAdminUsers] = useState<AdminUser[]>([]);
+  const [userSearch, setUserSearch] = useState('');
+  const [selectedUser, setSelectedUser] = useState<AdminUser | null>(null);
+  const [userDetailOpen, setUserDetailOpen] = useState(false);
   const [formData, setFormData] = useState({
     title: '', description: '', thumbnail: '', videoUrl: '',
     duration: 45, difficulty: 'beginner', instructor: '',
@@ -130,6 +148,12 @@ export default function AdminPage() {
       if (sessionsRes.data) setSessions(sessionsRes.data as Session[]);
       if (catsRes.data) setCategories(catsRes.data);
       if (themesRes.data) setThemes(themesRes.data);
+
+      const usersRes = await fetch('/api/admin/users');
+      if (usersRes.ok) {
+        const usersData = await usersRes.json();
+        if (Array.isArray(usersData)) setAdminUsers(usersData);
+      }
     } catch (err) {
       console.error('Error loading admin data:', err);
     } finally {
@@ -405,6 +429,56 @@ export default function AdminPage() {
     });
   };
 
+  const grantSubscription = async (userId: string, periodEnd: string) => {
+    try {
+      const res = await fetch('/api/admin/users', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId, action: 'grant', periodEnd }),
+      });
+      if (res.ok) {
+        setAdminUsers(prev => prev.map(u => u.id === userId ? { ...u, subscriptionStatus: 'active', subscriptionEnd: new Date(periodEnd).toISOString() } : u));
+        setMessage({ type: 'success', text: 'Subscription granted!' });
+        if (selectedUser?.id === userId) {
+          setSelectedUser(prev => prev ? { ...prev, subscriptionStatus: 'active', subscriptionEnd: new Date(periodEnd).toISOString() } : null);
+        }
+      } else {
+        const data = await res.json();
+        setMessage({ type: 'error', text: data.error || 'Failed to grant subscription' });
+      }
+    } catch {
+      setMessage({ type: 'error', text: 'Failed to grant subscription' });
+    }
+  };
+
+  const revokeSubscription = async (userId: string) => {
+    if (!confirm('Revoke this user\'s subscription?')) return;
+    try {
+      const res = await fetch('/api/admin/users', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId, action: 'revoke' }),
+      });
+      if (res.ok) {
+        setAdminUsers(prev => prev.map(u => u.id === userId ? { ...u, subscriptionStatus: 'canceled', subscriptionEnd: null } : u));
+        setMessage({ type: 'success', text: 'Subscription revoked' });
+        if (selectedUser?.id === userId) {
+          setSelectedUser(prev => prev ? { ...prev, subscriptionStatus: 'canceled', subscriptionEnd: null } : null);
+        }
+      } else {
+        const data = await res.json();
+        setMessage({ type: 'error', text: data.error || 'Failed to revoke subscription' });
+      }
+    } catch {
+      setMessage({ type: 'error', text: 'Failed to revoke subscription' });
+    }
+  };
+
+  const openUserDetail = (user: AdminUser) => {
+    setSelectedUser(user);
+    setUserDetailOpen(true);
+  };
+
   const filteredVideos = sessions.filter(s => !s.live_at).filter(s =>
     !videoSearch || s.title.toLowerCase().includes(videoSearch.toLowerCase())
   );
@@ -465,12 +539,15 @@ export default function AdminPage() {
               </div>
             ) : (
               <Tabs defaultValue="videos" className="w-full">
-                <TabsList className="grid w-full grid-cols-2 rounded-full mb-8 h-auto p-1.5 bg-muted">
+                <TabsList className="grid w-full grid-cols-3 rounded-full mb-8 h-auto p-1.5 bg-muted">
                   <TabsTrigger value="videos" className="rounded-full gap-2 py-3 px-4 data-[state=active]:bg-background data-[state=active]:shadow-sm">
                     <Video className="w-5 h-5" /> Videos
                   </TabsTrigger>
                   <TabsTrigger value="live" className="rounded-full gap-2 py-3 px-4 data-[state=active]:bg-background data-[state=active]:shadow-sm">
-                    <RadioTower className="w-5 h-5" /> Live Sessions
+                    <RadioTower className="w-5 h-5" /> Live
+                  </TabsTrigger>
+                  <TabsTrigger value="users" className="rounded-full gap-2 py-3 px-4 data-[state=active]:bg-background data-[state=active]:shadow-sm">
+                    <Users className="w-5 h-5" /> Users
                   </TabsTrigger>
                 </TabsList>
 
@@ -690,6 +767,83 @@ export default function AdminPage() {
                     )}
                   </div>
                 </TabsContent>
+
+                {/* Users Tab */}
+                <TabsContent value="users">
+                  <Card className="rounded-3xl">
+                    <CardHeader>
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                        <div>
+                          <CardTitle className="flex items-center gap-2">
+                            <Users className="w-5 h-5" /> Users
+                          </CardTitle>
+                          <CardDescription>{adminUsers.length} registered users</CardDescription>
+                        </div>
+                      </div>
+                      <div className="relative mt-4">
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                        <Input
+                          type="text"
+                          placeholder="Search by name or email..."
+                          value={userSearch}
+                          onChange={(e) => setUserSearch(e.target.value)}
+                          className="pl-10 pr-10 rounded-xl"
+                        />
+                        {userSearch && (
+                          <button onClick={() => setUserSearch('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
+                            <X className="w-4 h-4" />
+                          </button>
+                        )}
+                      </div>
+                    </CardHeader>
+                    <CardContent>
+                      <ScrollArea className="h-[600px]">
+                        <div className="space-y-2 pr-4">
+                          {adminUsers
+                            .filter(u => !userSearch || u.displayName.toLowerCase().includes(userSearch.toLowerCase()) || u.email.toLowerCase().includes(userSearch.toLowerCase()))
+                            .map((user) => (
+                            <div
+                              key={user.id}
+                              className="flex items-center gap-4 p-4 rounded-2xl bg-muted/50 hover:bg-muted transition-colors cursor-pointer"
+                              onClick={() => openUserDetail(user)}
+                            >
+                              <div className="relative w-10 h-10 rounded-full overflow-hidden flex-shrink-0 bg-gradient-to-br from-primary/20 to-secondary/30">
+                                {user.avatarUrl ? (
+                                  <img src={user.avatarUrl} alt={user.displayName} className="w-full h-full object-cover" />
+                                ) : (
+                                  <div className="w-full h-full flex items-center justify-center text-primary font-semibold text-sm">
+                                    {user.displayName.charAt(0).toUpperCase()}
+                                  </div>
+                                )}
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <div className="flex items-center gap-2 mb-0.5">
+                                  <h3 className="font-semibold line-clamp-1">{user.displayName}</h3>
+                                  {user.isAdmin && (
+                                    <Badge className="text-xs gap-1"><ShieldCheck className="w-3 h-3" />Admin</Badge>
+                                  )}
+                                  {user.subscriptionStatus === 'active' && (
+                                    <Badge className="text-xs gap-1 bg-yellow-500 text-white"><Crown className="w-3 h-3" />Pro</Badge>
+                                  )}
+                                </div>
+                                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                                  <span className="truncate">{user.email}</span>
+                                  <span className="flex-shrink-0">·</span>
+                                  <span className="flex-shrink-0 capitalize">{user.provider}</span>
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+                          {adminUsers.length === 0 && (
+                            <div className="text-center py-12 text-muted-foreground">
+                              No users found.
+                            </div>
+                          )}
+                        </div>
+                      </ScrollArea>
+                    </CardContent>
+                  </Card>
+                </TabsContent>
               </Tabs>
             )}
           </div>
@@ -898,6 +1052,123 @@ export default function AdminPage() {
                 {saving ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Saving...</> : <><Save className="w-4 h-4 mr-2" />Save</>}
               </Button>
             </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* User Detail Dialog */}
+        <Dialog open={userDetailOpen} onOpenChange={setUserDetailOpen}>
+          <DialogContent className="sm:max-w-md rounded-2xl">
+            <DialogHeader>
+              <DialogTitle>User Profile</DialogTitle>
+              <DialogDescription>Detailed user information</DialogDescription>
+            </DialogHeader>
+            {selectedUser && (
+              <div className="space-y-6">
+                <div className="flex items-center gap-4">
+                  <div className="relative w-16 h-16 rounded-full overflow-hidden flex-shrink-0 bg-gradient-to-br from-primary/20 to-secondary/30">
+                    {selectedUser.avatarUrl ? (
+                      <img src={selectedUser.avatarUrl} alt={selectedUser.displayName} className="w-full h-full object-cover" />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center text-primary font-bold text-xl">
+                        {selectedUser.displayName.charAt(0).toUpperCase()}
+                      </div>
+                    )}
+                  </div>
+                  <div>
+                    <h3 className="font-semibold text-lg">{selectedUser.displayName}</h3>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      {selectedUser.isAdmin && (
+                        <Badge className="gap-1"><ShieldCheck className="w-3 h-3" />Admin</Badge>
+                      )}
+                      {selectedUser.subscriptionStatus === 'active' && (
+                        <Badge className="gap-1 bg-yellow-500 text-white"><Crown className="w-3 h-3" />Pro</Badge>
+                      )}
+                      <Badge variant="outline" className="capitalize">{selectedUser.provider}</Badge>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="space-y-3">
+                  <div className="flex items-center gap-3 text-sm">
+                    <Mail className="w-4 h-4 text-muted-foreground" />
+                    <span>{selectedUser.email}</span>
+                  </div>
+                  {selectedUser.phone && (
+                    <div className="flex items-center gap-3 text-sm">
+                      <Phone className="w-4 h-4 text-muted-foreground" />
+                      <span>{selectedUser.phone}</span>
+                    </div>
+                  )}
+                  <div className="flex items-center gap-3 text-sm">
+                    <Calendar className="w-4 h-4 text-muted-foreground" />
+                    <span>Joined {format(new Date(selectedUser.createdAt), 'MMM d, yyyy')}</span>
+                  </div>
+                  {selectedUser.lastSignInAt && (
+                    <div className="flex items-center gap-3 text-sm">
+                      <Clock className="w-4 h-4 text-muted-foreground" />
+                      <span>Last sign in {format(new Date(selectedUser.lastSignInAt), 'MMM d, yyyy h:mm a')}</span>
+                    </div>
+                  )}
+                  <div className="flex items-center gap-3 text-sm">
+                    <Shield className="w-4 h-4 text-muted-foreground" />
+                    <span>Subscription: <Badge variant={selectedUser.subscriptionStatus === 'active' ? 'default' : 'secondary'} className="text-xs">{selectedUser.subscriptionStatus || 'None'}</Badge></span>
+                  </div>
+                  {selectedUser.subscriptionStatus === 'active' && selectedUser.subscriptionEnd && (
+                    <div className="flex items-center gap-3 text-sm text-muted-foreground">
+                      <Clock className="w-4 h-4" />
+                      <span>Expires {format(new Date(selectedUser.subscriptionEnd), 'MMM d, yyyy')}</span>
+                    </div>
+                  )}
+                </div>
+
+                <div className="space-y-3">
+                  {selectedUser.subscriptionStatus === 'active' ? (
+                    <Button
+                      variant="outline"
+                      className="w-full rounded-xl gap-2 text-destructive hover:bg-destructive/10"
+                      onClick={() => { revokeSubscription(selectedUser.id); setUserDetailOpen(false); }}
+                    >
+                      <Crown className="w-4 h-4" />
+                      Revoke Subscription
+                    </Button>
+                  ) : (
+                    <div className="space-y-2">
+                      <Label className="text-sm font-medium">Grant Subscription</Label>
+                      <div className="flex gap-2">
+                        <Input
+                          type="date"
+                          className="rounded-xl flex-1"
+                          defaultValue={format(new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), 'yyyy-MM-dd')}
+                          id="sub-end-date"
+                        />
+                        <Button
+                          className="rounded-xl gap-2"
+                          onClick={() => {
+                            const input = document.getElementById('sub-end-date') as HTMLInputElement;
+                            if (input?.value) {
+                              grantSubscription(selectedUser.id, input.value);
+                              setUserDetailOpen(false);
+                            }
+                          }}
+                        >
+                          <Crown className="w-4 h-4" />
+                          Grant
+                        </Button>
+                      </div>
+                      <p className="text-xs text-muted-foreground">Defaults to 30 days from now</p>
+                    </div>
+                  )}
+                </div>
+
+                <Button
+                  variant="outline"
+                  className="w-full rounded-xl"
+                  onClick={() => setUserDetailOpen(false)}
+                >
+                  Close
+                </Button>
+              </div>
+            )}
           </DialogContent>
         </Dialog>
       </main>
