@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -9,9 +10,9 @@ import { Navigation } from '@/components/yoga/navigation';
 import { Footer } from '@/components/yoga/footer';
 import { AuthModal } from '@/components/yoga/auth-modal';
 import { useAuth } from '@/hooks/use-auth';
+import { priceIds } from '@/lib/stripe-config';
 import { 
   Check, 
-  X, 
   Sparkles,
   Heart,
   Play,
@@ -19,11 +20,13 @@ import {
   Calendar,
   Zap,
   Shield,
-  Clock
+  Loader2,
 } from 'lucide-react';
 
 const plans = [
   {
+    id: 'monthly' as const,
+    priceId: priceIds.monthly,
     name: 'Monthly',
     price: 19,
     period: 'month',
@@ -38,6 +41,8 @@ const plans = [
     popular: false,
   },
   {
+    id: 'yearly' as const,
+    priceId: priceIds.yearly,
     name: 'Yearly',
     price: 149,
     period: 'year',
@@ -56,44 +61,47 @@ const plans = [
 ];
 
 const benefits = [
-  {
-    icon: Play,
-    title: '500+ Classes',
-    description: 'Yoga, Pilates, meditation and more',
-  },
-  {
-    icon: Users,
-    title: 'Live Sessions',
-    description: 'Join live classes with real instructors',
-  },
-  {
-    icon: Calendar,
-    title: 'New Content',
-    description: 'Fresh classes added every week',
-  },
-  {
-    icon: Zap,
-    title: 'Any Device',
-    description: 'Watch on TV, tablet, phone or web',
-  },
+  { icon: Play, title: '500+ Classes', description: 'Yoga, Pilates, meditation and more' },
+  { icon: Users, title: 'Live Sessions', description: 'Join live classes with real instructors' },
+  { icon: Calendar, title: 'New Content', description: 'Fresh classes added every week' },
+  { icon: Zap, title: 'Any Device', description: 'Watch on TV, tablet, phone or web' },
 ];
 
 export default function PricingPage() {
   const { user } = useAuth();
+  const router = useRouter();
   const [authModalOpen, setAuthModalOpen] = useState(false);
   const [loading, setLoading] = useState<string | null>(null);
 
-  const handleSubscribe = async (planName: string) => {
+  const handleSubscribe = async (planId: string, priceId: string) => {
     if (!user) {
       setAuthModalOpen(true);
       return;
     }
-    
-    setLoading(planName);
-    // Simulate subscription process
-    setTimeout(() => {
+
+    setLoading(planId);
+    try {
+      const res = await fetch('/api/subscribe', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          priceId,
+          email: user.email,
+          userId: user.id,
+        }),
+      });
+
+      const data = await res.json();
+      if (res.ok && data.checkoutUrl) {
+        window.location.href = data.checkoutUrl;
+      } else {
+        console.error('Checkout error:', data.error);
+        setLoading(null);
+      }
+    } catch (error) {
+      console.error('Error:', error);
       setLoading(null);
-    }, 2000);
+    }
   };
 
   return (
@@ -101,7 +109,6 @@ export default function PricingPage() {
       <Navigation />
       
       <main className="flex-1">
-        {/* Hero Section */}
         <section className="py-16 px-4 text-center bg-gradient-to-b from-primary/5 to-background">
           <div className="container mx-auto max-w-4xl">
             <Badge variant="secondary" className="mb-4 rounded-full px-4 py-1">
@@ -118,7 +125,6 @@ export default function PricingPage() {
           </div>
         </section>
 
-        {/* Benefits */}
         <section className="py-12 px-4 border-b border-border">
           <div className="container mx-auto max-w-5xl">
             <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
@@ -135,7 +141,6 @@ export default function PricingPage() {
           </div>
         </section>
 
-        {/* Pricing Cards */}
         <section className="py-16 px-4">
           <div className="container mx-auto max-w-3xl">
             <div className="grid md:grid-cols-2 gap-6">
@@ -171,24 +176,20 @@ export default function PricingPage() {
                   <CardContent className="space-y-3">
                     {plan.features.map((feature, index) => (
                       <div key={index} className="flex items-center gap-3">
-                        {feature.included ? (
-                          <Check className="w-5 h-5 text-green-500 flex-shrink-0" />
-                        ) : (
-                          <X className="w-5 h-5 text-muted-foreground/30 flex-shrink-0" />
-                        )}
-                        <span className={feature.included ? '' : 'text-muted-foreground/50'}>
-                          {feature.text}
-                        </span>
+                        <Check className="w-5 h-5 text-green-500 flex-shrink-0" />
+                        <span>{feature.text}</span>
                       </div>
                     ))}
                     
                     <Button 
-                      className={`w-full mt-6 rounded-xl ${plan.popular ? '' : 'bg-secondary text-secondary-foreground hover:bg-secondary/80'}`}
+                      className="w-full mt-6 rounded-xl"
                       variant={plan.popular ? 'default' : 'secondary'}
-                      onClick={() => handleSubscribe(plan.name)}
+                      onClick={() => handleSubscribe(plan.id, plan.priceId)}
                       disabled={loading !== null}
                     >
-                      {loading === plan.name ? 'Processing...' : user ? 'Subscribe' : 'Get Started'}
+                      {loading === plan.id ? (
+                        <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Redirecting...</>
+                      ) : user ? 'Subscribe' : 'Get Started'}
                     </Button>
                   </CardContent>
                 </Card>
@@ -197,7 +198,6 @@ export default function PricingPage() {
           </div>
         </section>
 
-        {/* Guarantee */}
         <section className="py-12 px-4 bg-muted/30">
           <div className="container mx-auto max-w-3xl text-center">
             <div className="flex items-center justify-center gap-3 mb-4">
@@ -210,29 +210,15 @@ export default function PricingPage() {
           </div>
         </section>
 
-        {/* FAQ */}
         <section className="py-16 px-4">
           <div className="container mx-auto max-w-3xl">
             <h2 className="text-2xl font-bold text-center mb-8">Frequently Asked Questions</h2>
-            
             <div className="space-y-4">
               {[
-                {
-                  q: 'Can I cancel anytime?',
-                  a: 'Yes! You can cancel your subscription at any time. Your access will continue until the end of your billing period.',
-                },
-                {
-                  q: 'What payment methods do you accept?',
-                  a: 'We accept all major credit cards, PayPal, and Apple Pay.',
-                },
-                {
-                  q: 'Can I switch plans?',
-                  a: 'Absolutely! You can upgrade or downgrade your plan at any time from your account settings.',
-                },
-                {
-                  q: 'Do you offer a free trial?',
-                  a: 'We offer a 7-day free trial for new members. No credit card required to start.',
-                },
+                { q: 'Can I cancel anytime?', a: 'Yes! You can cancel your subscription at any time. Your access will continue until the end of your billing period.' },
+                { q: 'What payment methods do you accept?', a: 'We accept all major credit cards and Apple Pay.' },
+                { q: 'Can I switch plans?', a: 'Absolutely! You can upgrade or downgrade your plan at any time from your account settings.' },
+                { q: 'Do you offer a free trial?', a: 'Yes! Every new subscription starts with a 7-day free trial. No charge until the trial ends.' },
               ].map((faq, index) => (
                 <Card key={index} className="rounded-xl">
                   <CardContent className="p-4">
@@ -245,7 +231,6 @@ export default function PricingPage() {
           </div>
         </section>
 
-        {/* CTA */}
         <section className="py-16 px-4 bg-gradient-to-t from-primary/5 to-background">
           <div className="container mx-auto max-w-2xl text-center">
             <Heart className="w-12 h-12 text-primary mx-auto mb-4" />
@@ -254,9 +239,7 @@ export default function PricingPage() {
               Join thousands of people who have transformed their lives through yoga and mindfulness.
             </p>
             <Link href="/">
-              <Button size="lg" className="rounded-xl">
-                Browse Classes
-              </Button>
+              <Button size="lg" className="rounded-xl">Browse Classes</Button>
             </Link>
           </div>
         </section>
